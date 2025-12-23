@@ -1,11 +1,11 @@
 
 import * as React from 'react';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   Expense, Supplier, Role, Customer, Sale, AppUser, 
   ActivityLog, Product, PayrollEntry, Invitation, 
   SupplierTransaction, Transaction, TransactionType, 
-  StockMovement, StaffMember 
+  StockMovement, StaffMember, UserSystemStatus 
 } from '../types';
 import ApiClient from '../services/ApiClient';
 
@@ -41,6 +41,7 @@ interface AppContextType {
   supplierTransactions: SupplierTransaction[];
   inventorySummary: InventorySummary | null;
   staff: StaffMember[];
+  lastSync: string | null;
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<Expense>;
   setExpenses: (expenses: Expense[]) => void;
   setSuppliers: (suppliers: Supplier[]) => void;
@@ -61,18 +62,22 @@ interface AppContextType {
   addStaffMember: (data: Omit<StaffMember, 'id' | 'attendance'>) => Promise<void>;
   markAttendance: (staffId: string) => Promise<void>;
   updateStaffStatus: (staffId: string, status: StaffMember['status']) => Promise<void>;
-  logout: () => void;
-  validateInvitation: (token: string) => Promise<any>;
-  acceptInvitation: (token: string, pass: string, email: string, name: string) => Promise<void>;
+  logout: () => Promise<void>;
   login: (email: string, pass: string) => Promise<any>;
   register: (name: string, email: string, pass: string, role: Role) => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
+  updateUserProfile: (name: string) => Promise<void>;
+  getInventoryValuation: () => Promise<any[]>;
+  syncData: () => Promise<void>;
+  generateSyncKey: () => string;
+  importFromSyncKey: (key: string) => boolean;
   createInvitation: (name: string, email: string, role: Role) => Promise<string>;
   revokeInvitation: (token: string) => Promise<void>;
-  toggleUserStatus: (userId: string, currentStatus: boolean) => Promise<void>;
-  updateUserProfile: (name: string) => Promise<void>;
-  fetchLastInvitation: () => Promise<Invitation | null>;
-  getInventoryValuation: () => Promise<any[]>;
+  validateInvitation: (token: string) => Promise<any>;
+  acceptInvitation: (token: string, name: string, password: string) => Promise<void>;
+  updateUserStatus: (id: string, systemStatus: UserSystemStatus) => Promise<void>;
+  deleteUserNode: (id: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  toggleUserStatus: (id: string, currentStatus: boolean) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -89,8 +94,6 @@ const Storage = {
   set: (key: string, val: any) => localStorage.setItem(key, JSON.stringify(val)),
 };
 
-// CRITICAL: Helper to merge local state with server data instead of replacing it.
-// This prevents history loss when the server resets or returns empty.
 const mergeData = <T extends { id?: string | number; token?: string }>(local: T[], remote: T[]): T[] => {
   if (!remote || remote.length === 0) return local;
   const localMap = new Map(local.map(item => [item.id || item.token, item]));
@@ -99,15 +102,16 @@ const mergeData = <T extends { id?: string | number; token?: string }>(local: T[
     if (key) localMap.set(key, item);
   });
   return Array.from(localMap.values()).sort((a: any, b: any) => {
-    const timeA = new Date(a.date || a.createdAt || 0).getTime();
-    const timeB = new Date(b.date || b.createdAt || 0).getTime();
-    return timeB - timeA; // Descending for history
+    const timeA = new Date(a.date || a.createdAt || a.timestamp || 0).getTime();
+    const timeB = new Date(b.date || b.createdAt || b.timestamp || 0).getTime();
+    return timeB - timeA;
   });
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => Storage.get('jireh_user'));
   const [loading, setLoading] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(() => Storage.get('jireh_last_sync'));
   
   const [expenses, setExpensesState] = useState<Expense[]>(() => Storage.get('jireh_expenses') || []);
   const [suppliers, setSuppliersState] = useState<Supplier[]>(() => Storage.get('jireh_suppliers') || []);
@@ -136,61 +140,185 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { Storage.set('jireh_supplier_txs', supplierTransactions); }, [supplierTransactions]);
   useEffect(() => { Storage.set('jireh_inv_summary', inventorySummary); }, [inventorySummary]);
   useEffect(() => { Storage.set('jireh_staff_members', staff); }, [staff]);
+  useEffect(() => { Storage.set('jireh_last_sync', lastSync); }, [lastSync]);
 
-  useEffect(() => {
-    if (user) {
-      const fetchData = async () => {
-        try {
-          const [
-            expData, supData, prodData, custData, 
-            saleData, logData, payData, movData, stxData, invSum, staffData, invData
-          ] = await Promise.all([
-            ApiClient.get('/api/expenses').catch(() => []),
-            ApiClient.get('/api/suppliers').catch(() => []),
-            ApiClient.get('/api/products').catch(() => []),
-            ApiClient.get('/api/customers').catch(() => []),
-            ApiClient.get('/api/sales').catch(() => []),
-            ApiClient.get('/api/logs').catch(() => []),
-            ApiClient.get('/api/payroll').catch(() => []),
-            ApiClient.get('/api/stock-movements').catch(() => []),
-            ApiClient.get('/api/supplier-transactions').catch(() => []),
-            ApiClient.get('/api/inventory/summary').catch(() => null),
-            ApiClient.get('/api/staff').catch(() => []),
-            ApiClient.get('/api/invitations').catch(() => [])
-          ]);
-          
-          // Use merging to ensure local data is not deleted by empty server responses
-          setExpensesState(prev => mergeData(prev, expData));
-          setSuppliersState(prev => mergeData(prev, supData));
-          setProductsState(prev => mergeData(prev, prodData));
-          setCustomersState(prev => mergeData(prev, custData));
-          setSalesState(prev => mergeData(prev, saleData));
-          setLogsState(prev => mergeData(prev, logData));
-          setPayrollState(prev => mergeData(prev, payData));
-          setStockMovements(prev => mergeData(prev, movData));
-          setSupplierTransactions(prev => mergeData(prev, stxData));
-          if (invSum) setInventorySummary(invSum);
-          setStaffState(prev => mergeData(prev, staffData));
-          setInvitationsState(prev => mergeData(prev as any, invData as any) as any);
-        } catch (e) {
-          console.warn("Sync failed. Using Local-Only Mode.");
-        }
-      };
-      fetchData();
+  const syncData = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const [
+        expData, supData, prodData, custData, 
+        saleData, logData, payData, movData, stxData, invSum, staffData, invData, userData
+      ] = await Promise.all([
+        ApiClient.get('/api/expenses').catch(() => []),
+        ApiClient.get('/api/suppliers').catch(() => []),
+        ApiClient.get('/api/products').catch(() => []),
+        ApiClient.get('/api/customers').catch(() => []),
+        ApiClient.get('/api/sales').catch(() => []),
+        ApiClient.get('/api/logs').catch(() => []),
+        ApiClient.get('/api/payroll').catch(() => []),
+        ApiClient.get('/api/stock-movements').catch(() => []),
+        ApiClient.get('/api/supplier-transactions').catch(() => []),
+        ApiClient.get('/api/inventory/summary').catch(() => null),
+        ApiClient.get('/api/staff').catch(() => []),
+        ApiClient.get('/api/invitations').catch(() => []),
+        ApiClient.get('/api/users').catch(() => [])
+      ]);
+      
+      setExpensesState(prev => mergeData(prev, expData));
+      setSuppliersState(prev => mergeData(prev, supData));
+      setProductsState(prev => mergeData(prev, prodData));
+      setCustomersState(prev => mergeData(prev, custData));
+      setSalesState(prev => mergeData(prev, saleData));
+      setLogsState(prev => mergeData(prev, logData));
+      setPayrollState(prev => mergeData(prev, payData));
+      setStockMovements(prev => mergeData(prev, movData));
+      setSupplierTransactions(prev => mergeData(prev, stxData));
+      if (invSum) setInventorySummary(invSum);
+      setStaffState(prev => mergeData(prev, staffData));
+      setInvitationsState(prev => mergeData(prev as any, invData as any) as any);
+      setUsersState(prev => mergeData(prev, userData));
+      setLastSync(new Date().toISOString());
+    } catch (e) {
+      console.warn("Sync partially failed. System active in hybrid mode.");
+    } finally {
+      setLoading(false);
     }
   }, [user]);
 
-  const addLog = async (action: string, details: string) => {
-    const newLog = {
-        id: `log_${Date.now()}`,
-        action,
-        details,
-        userId: user?.id || 'system',
-        timestamp: new Date().toISOString()
-    };
-    setLogsState(prev => [newLog, ...prev]);
-    try { await ApiClient.post('/api/logs', newLog); } catch (e) {}
+  useEffect(() => {
+    if (user) syncData();
+  }, [user, syncData]);
+
+  const login = async (email: string, pass: string) => {
+    setLoading(true);
+    try {
+        const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
+        const foundIdx = authUsers.findIndex((u: any) => u.email === email && u.password === pass);
+        if (foundIdx !== -1) {
+            const found = authUsers[foundIdx];
+            
+            if (found.systemStatus === 'SUSPENDED') throw new Error('Account Suspended. Contact Admin.');
+
+            const now = new Date().toISOString();
+            found.lastLogin = now;
+            found.isOnline = true;
+            authUsers[foundIdx] = found;
+            localStorage.setItem('jireh_users_auth', JSON.stringify(authUsers));
+
+            const userObj: User = { id: found.id, name: found.name, email: found.email, role: found.role };
+            setUser(userObj);
+            Storage.set('jireh_user', userObj);
+            
+            // Critical session tracking call
+            try {
+              await ApiClient.post(`/api/users/${found.id}/session`, { lastLogin: now, isOnline: true });
+            } catch(e) {}
+
+            await syncData();
+            return found;
+        } else { throw new Error('Invalid credentials'); }
+    } finally {
+        setLoading(false);
+    }
   };
+
+  const logout = async () => {
+    if (user) {
+      const now = new Date().toISOString();
+      try {
+        await ApiClient.post(`/api/users/${user.id}/session`, { lastLogout: now, isOnline: false });
+      } catch(e) {}
+      
+      const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
+      const idx = authUsers.findIndex((u: any) => u.id === user.id);
+      if (idx !== -1) {
+          authUsers[idx].lastLogout = now;
+          authUsers[idx].isOnline = false;
+          localStorage.setItem('jireh_users_auth', JSON.stringify(authUsers));
+      }
+    }
+    setUser(null);
+    localStorage.removeItem('jireh_user');
+  };
+
+  const register = async (name: string, email: string, pass: string, role: Role) => {
+    const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
+    if (authUsers.some((u: any) => u.email === email)) { await login(email, pass); return; }
+    const newUser = { 
+      id: `u_${Date.now()}`, 
+      name, 
+      email, 
+      password: pass, 
+      role, 
+      isActive: true, 
+      systemStatus: 'OPERATIONAL' as UserSystemStatus,
+      isOnline: false,
+      createdAt: new Date().toISOString()
+    };
+    localStorage.setItem('jireh_users_auth', JSON.stringify([...authUsers, newUser]));
+    setUsersState(prev => [...prev, { ...newUser } as any]);
+    await login(email, pass);
+  };
+
+  const updateUserStatus = async (id: string, systemStatus: UserSystemStatus) => {
+    setUsersState(prev => prev.map(u => u.id === id ? { ...u, systemStatus, isActive: systemStatus === 'OPERATIONAL' } : u));
+    const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
+    const idx = authUsers.findIndex((u: any) => u.id === id);
+    if (idx !== -1) {
+        authUsers[idx].systemStatus = systemStatus;
+        authUsers[idx].isActive = systemStatus === 'OPERATIONAL';
+        localStorage.setItem('jireh_users_auth', JSON.stringify(authUsers));
+    }
+    try {
+        await ApiClient.post(`/api/users/${id}/status`, { systemStatus });
+    } catch(e) {}
+  };
+
+  const deleteUserNode = async (id: string) => {
+    setUsersState(prev => prev.filter(u => u.id !== id));
+    const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
+    localStorage.setItem('jireh_users_auth', JSON.stringify(authUsers.filter((u: any) => u.id !== id)));
+    try {
+        await ApiClient.delete(`/api/users/${id}`);
+    } catch(e) {}
+  };
+
+  const generateSyncKey = () => {
+    const data = {
+      expenses, suppliers, products, customers, sales, users, logs, payroll, invitations, stockMovements, supplierTransactions, staff
+    };
+    return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  };
+
+  const importFromSyncKey = (key: string) => {
+    try {
+      const data = JSON.parse(decodeURIComponent(escape(atob(key))));
+      if (data.expenses) setExpensesState(data.expenses);
+      if (data.suppliers) setSuppliersState(data.suppliers);
+      if (data.products) setProductsState(data.products);
+      if (data.customers) setCustomersState(data.customers);
+      if (data.sales) setSalesState(data.sales);
+      if (data.users) setUsersState(data.users);
+      if (data.logs) setLogsState(data.logs);
+      if (data.payroll) setPayrollState(data.payroll);
+      if (data.invitations) setInvitationsState(data.invitations);
+      if (data.stockMovements) setStockMovements(data.stockMovements);
+      if (data.supplierTransactions) setSupplierTransactions(data.supplierTransactions);
+      if (data.staff) setStaffState(data.staff);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const getInventoryValuation = useCallback(async () => {
+      return products.map((p) => ({
+          id: p.id, name: p.name, sku: p.sku, category: p.category, quantity: p.quantity,
+          unitCost: p.cost || 0, unitPrice: p.price, totalCost: p.quantity * (p.cost || 0),
+          totalRetailValue: p.quantity * p.price, potentialProfit: (p.quantity * p.price) - (p.quantity * (p.cost || 0))
+      }));
+  }, [products]);
 
   const addExpense = async (expenseData: Omit<Expense, 'id'>) => {
     const tempId = `exp_${Date.now()}`;
@@ -378,34 +506,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try { await ApiClient.post(`/api/staff/${staffId}/update`, { status }); } catch (e) {}
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('jireh_user');
-  };
-
-  const login = async (email: string, pass: string) => {
-    setLoading(true);
-    try {
-        const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
-        const found = authUsers.find((u: any) => u.email === email && u.password === pass);
-        if (found) {
-            const userObj: User = { id: found.id, name: found.name, email: found.email, role: found.role };
-            setUser(userObj);
-            Storage.set('jireh_user', userObj);
-            return userObj;
-        } else { throw new Error('Invalid credentials'); }
-    } finally { setLoading(false); }
-  };
-
-  const register = async (name: string, email: string, pass: string, role: Role) => {
-    const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
-    if (authUsers.some((u: any) => u.email === email)) { await login(email, pass); return; }
-    const newUser = { id: `u_${Date.now()}`, name, email, password: pass, role, isActive: true };
-    localStorage.setItem('jireh_users_auth', JSON.stringify([...authUsers, newUser]));
-    setUsersState(prev => [...prev, { id: newUser.id, name, email, role, isActive: true }]);
-    await login(email, pass);
-  };
-
   const updateUserProfile = async (name: string) => {
     if (!user) return;
     const updatedUser = { ...user, name };
@@ -419,19 +519,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const getInventoryValuation = async () => {
-      return products.map((p) => ({
-          id: p.id, name: p.name, sku: p.sku, category: p.category, quantity: p.quantity,
-          unitCost: p.cost || 0, unitPrice: p.price, totalCost: p.quantity * (p.cost || 0),
-          totalRetailValue: p.quantity * p.price, potentialProfit: (p.quantity * p.price) - (p.quantity * (p.cost || 0))
-      }));
-  };
-
   const createInvitation = async (name: string, email: string, role: Role) => {
-    const token = Math.random().toString(36).substring(7);
-    const newInvite: Invitation = { token, name, email, role, status: 'PENDING', createdAt: new Date().toISOString() };
-    setInvitationsState(prev => [newInvite, ...prev]);
-    return token;
+    try {
+        const saved = await ApiClient.post('/api/invitations', { name, email, role });
+        setInvitationsState(prev => [saved, ...prev]);
+        return saved.token;
+    } catch (e) {
+        const token = Math.random().toString(36).substring(7);
+        const newInvite: Invitation = { token, name, email, role, status: 'PENDING', createdAt: new Date().toISOString() };
+        setInvitationsState(prev => [newInvite, ...prev]);
+        return token;
+    }
   };
 
   const revokeInvitation = async (token: string) => {
@@ -440,23 +538,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const validateInvitation = async (token: string) => {
-    const found = invitations.find(i => i.token === token && i.status === 'PENDING');
-    if (!found) throw new Error("Invalid Token");
-    return found;
+    try {
+        return await ApiClient.get(`/api/invitations/validate/${token}`);
+    } catch (e) {
+        const found = invitations.find(i => i.token === token && i.status === 'PENDING');
+        if (!found) throw new Error("Invalid Token");
+        return found;
+    }
+  };
+
+  const acceptInvitation = async (token: string, name: string, password: string) => {
+    try {
+        const result = await ApiClient.post('/api/invitations/accept', { token, name, password });
+        // Update local auth for mock persistence
+        const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
+        const newUser = { 
+          id: result.user.id, 
+          name: result.user.name, 
+          email: result.user.email, 
+          password, 
+          role: result.user.role, 
+          isActive: true,
+          systemStatus: 'OPERATIONAL' as UserSystemStatus,
+          isOnline: true
+        };
+        localStorage.setItem('jireh_users_auth', JSON.stringify([...authUsers, newUser]));
+        
+        await login(result.user.email, password);
+    } catch (e) {
+        const invite = await validateInvitation(token);
+        await register(name, invite.email, password, invite.role);
+        setInvitationsState(prev => prev.map(i => i.token === token ? { ...i, status: 'ACCEPTED' } : i));
+    }
+  };
+
+  const toggleUserStatus = async (id: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    setUsersState(prev => prev.map(u => u.id === id ? { ...u, isActive: nextStatus } : u));
+    try {
+      await ApiClient.post(`/api/users/${id}/status`, { isActive: nextStatus });
+    } catch (e) {
+      console.warn("Status sync failure. Local update persisted.");
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    console.log("Password reset link requested for:", email);
+    return new Promise<void>((resolve) => setTimeout(resolve, 1000));
   };
 
   return (
     <AppContext.Provider value={{ 
-      user, loading, expenses, suppliers, products, customers, sales, users, logs, payroll, invitations, stockMovements, supplierTransactions, inventorySummary, staff,
+      user, loading, expenses, suppliers, products, customers, sales, users, logs, payroll, invitations, stockMovements, supplierTransactions, inventorySummary, staff, lastSync,
       addExpense, setExpenses: setExpensesState, setSuppliers: setSuppliersState, setCustomers: setCustomersState, setProducts: setProductsState, setSales: setSalesState, addSale, addPayroll, addCustomer,
       addSupplier, addProduct, updateProduct, updateProductStock, adjustStock, receiveStock, addSupplierPayment, addSupplierFee, addStaffMember, markAttendance, updateStaffStatus, logout, login, register,
-      updateUserProfile, getInventoryValuation, createInvitation, 
-      validateInvitation, 
-      acceptInvitation: async () => {}, 
-      resetPassword: async () => {}, 
-      revokeInvitation, 
-      toggleUserStatus: async () => {}, 
-      fetchLastInvitation: async () => null
+      updateUserProfile, getInventoryValuation, createInvitation, syncData, generateSyncKey, importFromSyncKey,
+      validateInvitation, acceptInvitation, revokeInvitation, toggleUserStatus, resetPassword, updateUserStatus, deleteUserNode
     }}>
       {children}
     </AppContext.Provider>

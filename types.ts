@@ -1,3 +1,4 @@
+
 export enum TransactionType {
   CREDIT = 'CREDIT',
   DEBIT = 'DEBIT'
@@ -5,42 +6,10 @@ export enum TransactionType {
 
 export enum Role {
   ADMIN = 'ADMIN',
-  STAFF = 'STAFF',
-  SALES = 'SALES',
-  USER = 'USER'
+  STAFF = 'STAFF'
 }
 
-// --- App Identity & Security Types ---
-
-export interface AppUser {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  isActive: boolean;
-  createdAt?: string;
-  // Added for the Settings profile sync
-  lastLogin?: string;
-}
-
-export interface Invitation {
-  token: string;
-  email: string;
-  name: string;
-  role: Role;
-  status: 'PENDING' | 'ACCEPTED';
-  createdAt: string;
-}
-
-export interface ActivityLog {
-  id: string;
-  action: string;
-  details: string;
-  timestamp: string;
-  userId: string;
-}
-
-// --- Business Logic Types ---
+export type UserSystemStatus = 'OPERATIONAL' | 'SUSPENDED' | 'ON_HOLD';
 
 export interface Transaction {
   id: string;
@@ -116,6 +85,27 @@ export interface StaffMember {
   attendance: string[]; // dates
 }
 
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  isActive: boolean;
+  systemStatus: UserSystemStatus;
+  lastLogin?: string;
+  lastLogout?: string;
+  isOnline?: boolean;
+  createdAt?: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  action: string;
+  details: string;
+  timestamp: string;
+  userId: string;
+}
+
 export interface Expense {
   id: string;
   type: 'EXPENSE' | 'DEBIT' | 'DEPOSIT';
@@ -140,6 +130,15 @@ export interface PayrollEntry {
   periodStart: string;
   periodEnd: string;
   processedByName?: string;
+}
+
+export interface Invitation {
+  token: string;
+  email: string;
+  name: string;
+  role: Role;
+  status: 'PENDING' | 'ACCEPTED';
+  createdAt: string;
 }
 
 export interface SupplierTransaction {

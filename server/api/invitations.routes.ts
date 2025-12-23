@@ -1,13 +1,15 @@
+
 import { Router } from 'express';
 import { getPool, sql } from '../db.ts';
 import fallbackStore from '../fallbackStore.ts';
 import crypto from 'crypto'; 
-import { sendInvitationEmail } from '../utils/emailService.ts'; // Import the service
+import { sendInvitationEmail } from '../utils/emailService.ts';
 
 const router = Router();
 
 /**
  * GET /api/invitations
+ * Retrieves all invitations from the registry.
  */
 router.get('/', async (req, res) => {
   try {
@@ -54,7 +56,6 @@ router.get('/validate/:token', async (req, res) => {
 
 /**
  * POST /api/invitations
- * Now triggers the real email dispatch
  */
 router.post('/', async (req, res) => {
   const { name, email, role } = req.body;
@@ -84,28 +85,63 @@ router.post('/', async (req, res) => {
     request.input('expiryDate', sql.DateTime, invitation.expiryDate);
     request.input('createdAt', sql.DateTime, invitation.createdAt);
 
-    const result = await request.query(`
+    await request.query(`
       INSERT INTO Invitations (token, name, email, role, status, expiryDate, createdAt)
-      OUTPUT inserted.*
       VALUES (@token, @name, @email, @role, @status, @expiryDate, @createdAt)
     `);
 
-    const savedInvite = result.recordset[0];
-
-    // --- 2025 EMAIL DISPATCH ---
-    // We send the email but don't block the API response if it takes a moment
-    sendInvitationEmail(savedInvite.email, savedInvite.name, savedInvite.token)
-      .catch(e => console.error("Async Email Error:", e));
-
-    res.status(201).json(savedInvite);
+    sendInvitationEmail(email, name, token).catch(e => console.error("Email Error:", e));
+    res.status(201).json(invitation);
   } catch (err: any) {
     const rec = await fallbackStore.insert('Invitations', invitation);
-    
-    // Trigger email even for fallback store (for local testing)
-    sendInvitationEmail(invitation.email, invitation.name, invitation.token)
-      .catch(e => console.error("Fallback Email Error:", e));
-
+    sendInvitationEmail(email, name, token).catch(e => console.error("Email Fallback Error:", e));
     res.status(201).json(rec);
+  }
+});
+
+/**
+ * POST /api/invitations/accept
+ */
+router.post('/accept', async (req, res) => {
+  const { token, name, password } = req.body;
+  
+  try {
+    const pool = await getPool();
+    
+    const inviteResult = await pool.request()
+        .input('token', sql.NVarChar, token)
+        .query("SELECT * FROM Invitations WHERE token = @token AND status = 'PENDING'");
+        
+    if (inviteResult.recordset.length === 0) throw new Error("Link invalid or expired.");
+    const invite = inviteResult.recordset[0];
+
+    const userId = `u_${Date.now()}`;
+    await pool.request()
+        .input('id', sql.NVarChar, userId)
+        .input('name', sql.NVarChar, name)
+        .input('email', sql.NVarChar, invite.email)
+        .input('role', sql.NVarChar, invite.role)
+        .input('isActive', sql.Bit, 1)
+        .query("INSERT INTO Users (id, name, email, role, isActive, createdAt) VALUES (@id, @name, @email, @role, @isActive, GETDATE())");
+
+    await pool.request()
+        .input('token', sql.NVarChar, token)
+        .query("UPDATE Invitations SET status = 'ACCEPTED' WHERE token = @token");
+
+    res.json({ success: true, user: { id: userId, name, email: invite.email, role: invite.role } });
+  } catch (err: any) {
+    const invitations = await fallbackStore.getAll('Invitations');
+    const invite = invitations.find((i: any) => i.token === token && i.status === 'PENDING');
+    
+    if (!invite) return res.status(400).json({ error: 'Access token invalid.' });
+    
+    const userId = `u_${Date.now()}`;
+    const newUser = { id: userId, name, email: invite.email, role: invite.role, isActive: true, createdAt: new Date().toISOString() };
+    
+    await fallbackStore.insert('Users', newUser);
+    await fallbackStore.update('Invitations', token, { status: 'ACCEPTED' });
+    
+    res.json({ success: true, user: newUser });
   }
 });
 
@@ -121,7 +157,7 @@ router.delete('/:token', async (req, res) => {
       .query('DELETE FROM Invitations WHERE token = @token');
     res.json({ success: true });
   } catch (err: any) {
-    console.log(`Revoking local token: ${token}`);
+    await fallbackStore.delete('Invitations', token);
     res.json({ success: true });
   }
 });

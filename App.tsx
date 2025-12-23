@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
@@ -8,6 +9,7 @@ import { SupplierManagement } from './components/SupplierManagement';
 import { CustomerLedger } from './components/CustomerLedger';
 import { SupplierLedger } from './components/SupplierLedger';
 import { LoginPage } from './components/LoginPage';
+import { JoinPage } from './components/JoinPage';
 
 // --- Shared Components ---
 import { Loader2 } from 'lucide-react';
@@ -93,6 +95,7 @@ export const Layout = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans overflow-hidden">
+      {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/60 z-40 md:hidden backdrop-blur-md transition-opacity duration-300"
@@ -100,6 +103,7 @@ export const Layout = () => {
         />
       )}
 
+      {/* Main Sidebar */}
       <aside 
         className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-500 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static shrink-0 flex flex-col shadow-2xl md:shadow-none`}
         style={{ height: '100vh' }}
@@ -150,7 +154,7 @@ export const Layout = () => {
                   <span className="flex-1 text-left text-sm tracking-tight">{item.name}</span>
                   
                   {item.badge > 0 && (
-                     <span className={`flex items-center justify-center text-[10px] font-black h-5 min-w-[20px] px-2 rounded-full shadow-sm animate-pulse ${isActive ? 'bg-white text-indigo-600' : 'bg-red-500 text-white'}`}>
+                     <span className={`flex items-center justify-center text-[10px] font-black h-5 min-w-[20px] px-2 rounded-full shadow-sm animate-pulse ${isActive ? 'bg-white text-indigo-600' : 'bg-red-50 text-white'}`}>
                         {item.badge}
                      </span>
                   )}
@@ -222,6 +226,8 @@ export const Layout = () => {
 // --- Guards ---
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     const { user, loading } = useApp();
+    
+    // While checking session, show a clean loader
     if (loading) {
         return (
             <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
@@ -230,36 +236,46 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
             </div>
         );
     }
+    
+    // If no user is found in the current session, force redirect to login
     if (!user) {
         return <Navigate to="/login" replace />;
     }
+    
     return children ? <>{children}</> : <Outlet />;
 };
 
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
     const { user, loading } = useApp();
+    
     if (loading) return null;
+    
+    // If user is already logged in, skip the login page and go to dashboard
     if (user) {
         return <Navigate to="/dashboard" replace />;
     }
+    
     return <>{children}</>;
 };
 
 export const AppRoutes = () => {
-    // Corrected: Destructure staff from useApp
-    const { user, staff } = useApp(); 
+    const { user } = useApp();
     const navigate = useNavigate();
     const goBack = () => navigate(-1);
     
+    // Recalculate dashboard target based on current user role
     const dashboardTarget = user?.role === Role.ADMIN ? "/admin/dashboard" : "/staff/dashboard";
 
     return (
         <Routes>
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Route path="/join" element={<PublicRoute><JoinPage /></PublicRoute>} />
             
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Navigate to={dashboardTarget} replace />} />
+                
+                {/* Specific redirect for common hyphenated typo mentioned in user request */}
                 <Route path="admin-dashboard" element={<Navigate to="/admin/dashboard" replace />} />
                 
                 {/* Unified Admin Routes */}
@@ -268,10 +284,7 @@ export const AppRoutes = () => {
                 <Route path="admin/inventory" element={<Inventory onBack={goBack} />} />
                 <Route path="admin/stock" element={<Stock onBack={goBack} />} />
                 <Route path="admin/staff-management" element={<StaffManagement onBack={goBack} />} />
-                
-                {/* Fixed: Passing staff prop, omitting onBack if Staff component doesn't support it */}
-                <Route path="admin/staff-roster" element={<Staff staff={staff} />} />
-                
+                <Route path="admin/staff-roster" element={<Staff onBack={goBack} />} />
                 <Route path="admin/company-expenses" element={<CompanyExpenses onBack={goBack} />} />
                 <Route path="admin/bank-deposit" element={<BankDeposit onBack={goBack} />} />
                 <Route path="admin/payroll" element={<Payroll onBack={goBack} />} />
@@ -285,15 +298,14 @@ export const AppRoutes = () => {
                 <Route path="staff/dashboard" element={<Dashboard onNavigate={(p: string) => navigate(p === 'sales' ? '/staff/sales' : `/staff/${p}`)} />} />
                 <Route path="staff/sales" element={<Sales />} />
                 <Route path="staff/stock" element={<Stock onBack={goBack} />} />
-                
-                {/* Fixed: Passing staff prop, omitting onBack if Staff component doesn't support it */}
-                <Route path="staff/staff-roster" element={<Staff staff={staff} />} />
-                
+                <Route path="staff/staff-roster" element={<Staff onBack={goBack} />} />
                 <Route path="staff/customers" element={<Customers onBack={goBack} onViewLedger={(c) => { localStorage.setItem('last_ledger_customer', c.id); navigate('/staff/customer-ledger'); }} />} />
                 <Route path="staff/customer-ledger" element={<CustomerLedger onBack={() => navigate('/staff/customers')} />} />
                 <Route path="staff/reports" element={<Reports />} />
                 
                 <Route path="settings" element={<Settings />} />
+                
+                {/* Catch-all for protected routes: always return to role-appropriate dashboard */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
         </Routes>

@@ -1,10 +1,10 @@
-
 import fs from 'fs';
 import path from 'path';
 
 type RecordType = { id: string; createdAt?: string; [k: string]: any };
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+// Fix: Use path.resolve('.') instead of process.cwd() to avoid TypeScript errors when process types are incomplete
+const DATA_DIR = path.join(path.resolve('.'), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'fallback-store.json');
 
 const DEFAULT_STORE: Record<string, RecordType[]> = {

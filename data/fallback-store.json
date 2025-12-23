@@ -57,7 +57,16 @@
   ],
   "Sales": [],
   "Payroll": [],
-  "Staff": [],
+  "Staff": [
+    {
+      "id": "staff_1766531845790",
+      "name": "h",
+      "role": "v",
+      "status": "on-leave",
+      "attendance": [],
+      "createdAt": "2025-12-23T23:17:25.792Z"
+    }
+  ],
   "Inventory": [
     {
       "id": "inventory_1766417472533",
@@ -119,5 +128,6 @@
   "Users": [],
   "SupplierTransactions": [],
   "Invitations": [],
-  "Expenses": []
+  "Expenses": [],
+  "Transactions": []
 }
