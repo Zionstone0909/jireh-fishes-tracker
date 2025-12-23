@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
+import { useSyncData } from './hooks/useSyncData';
 import { Role } from './types';
 import { Settings } from './components/Settings';
 import { Customers } from './components/Customers';
@@ -226,6 +227,7 @@ export const Layout = () => {
 // --- Guards ---
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     const { user, loading } = useApp();
+    useSyncData(); // Trigger cloud synchronization on protected route entry
     
     // While checking session, show a clean loader
     if (loading) {
@@ -274,9 +276,6 @@ export const AppRoutes = () => {
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Navigate to={dashboardTarget} replace />} />
-                
-                {/* Specific redirect for common hyphenated typo mentioned in user request */}
-                <Route path="admin-dashboard" element={<Navigate to="/admin/dashboard" replace />} />
                 
                 {/* Unified Admin Routes */}
                 <Route path="admin/dashboard" element={<Dashboard onNavigate={(p: string) => navigate(p === 'sales' ? '/admin/sales' : `/admin/${p}`)} />} />

@@ -130,7 +130,7 @@ export const Settings = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-4 space-y-6">
-              {/* CSS Conflict Fixed: Removed 'relative' from sticky element */}
+              {/* FIXED: Removed 'relative' as it conflict with 'sticky' positioning in Tailwind linting */}
               <Card className="p-8 rounded-[2.5rem] border-0 shadow-2xl bg-white sticky top-24 overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
                   <div className="flex flex-col items-center text-center mb-10">

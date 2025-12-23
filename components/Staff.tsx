@@ -5,6 +5,10 @@ import { useApp } from '../context/AppContext';
 import { Card, Badge, Button, Input, Select, BackButton } from './Shared';
 import { StaffMember, Role } from '../types';
 
+/**
+ * Interface for Staff component props.
+ * Specifically handles navigation via onBack.
+ */
 interface StaffProps {
     onBack?: () => void;
 }

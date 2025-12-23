@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { useSyncData } from '../hooks/useSyncData';
 import { Card, Badge } from './Shared';
-// Ensure ActivityFeed correctly imported as it now takes no props
-import { ActivityFeed } from './ActivityFeed'; 
+import { ActivityFeed } from './ActivityFeed';
 import { 
     DollarSign, 
     Package, 
@@ -12,7 +13,9 @@ import {
     ArrowRight,
     TrendingUp,
     ChevronRight,
-    Users as UsersIcon 
+    Users as UsersIcon,
+    RefreshCw,
+    ShieldCheck
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Role } from '../types';
@@ -22,7 +25,9 @@ interface DashboardProps {
 }
 
 export const Dashboard = ({ onNavigate }: DashboardProps) => {
-    const { user, sales, products, users } = useApp(); // Removed 'logs' as ActivityFeed uses context now
+    const { user, sales, products, logs, users, lastSync, syncData } = useApp();
+    useSyncData(); // Execute cloud handshake on dashboard view initialization
+    
     const isAdmin = user?.role === Role.ADMIN;
     
     // Metrics Calculation
@@ -66,62 +71,86 @@ export const Dashboard = ({ onNavigate }: DashboardProps) => {
         
         return (
             <div 
-                className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group cursor-pointer"
+                className="bg-white p-4 sm:p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group cursor-pointer relative overflow-hidden"
                 onClick={onClick}
             >
-                <div className="flex justify-between items-start mb-3 sm:mb-4">
-                    <div className={`p-2 sm:p-3.5 rounded-xl ring-1 ${style} group-hover:scale-110 transition-transform`}>
-                        <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+                <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-12 -mt-12 opacity-50 group-hover:scale-150 transition-transform duration-700"></div>
+                <div className="flex justify-between items-start mb-4 relative z-10">
+                    <div className={`p-3.5 rounded-2xl ring-1 ${style} group-hover:rotate-6 transition-transform shadow-sm`}>
+                        <Icon className="w-6 h-6" />
                     </div>
                     {trend && (
-                        <div className="text-[10px] sm:text-xs font-semibold flex items-center bg-green-100 text-green-700 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full">
-                            <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                        <div className="text-[10px] font-black flex items-center bg-green-100 text-green-700 px-3 py-1 rounded-full uppercase tracking-widest">
+                            <TrendingUp className="w-3 h-3 mr-1" />
                             {trend}
                         </div>
                     )}
                 </div>
-                <p className="text-xs sm:text-sm font-medium text-slate-500 mb-1 truncate">{title}</p>
-                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 truncate">
+                <p className="text-[10px] font-black text-slate-400 mb-1 truncate uppercase tracking-widest">{title}</p>
+                <h2 className="text-2xl font-black text-slate-900 mb-2 truncate tracking-tight">
                     {typeof value === 'number' ? 
-                        (title.toLowerCase().includes('revenue') ? `₦${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : value.toLocaleString()) : 
+                        (title.toLowerCase().includes('revenue') ? `₦${value.toLocaleString(undefined, { minimumFractionDigits: 0 })}` : value.toLocaleString()) : 
                         value
                     }
                 </h2>
-                <div className="flex justify-between items-center text-xs sm:text-sm text-indigo-600 font-semibold group-hover:text-indigo-800 transition-colors">
-                    <span>View Details</span>
-                    <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform" />
+                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-indigo-600 group-hover:text-indigo-800 transition-colors">
+                    <span>Audit Details</span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="p-4 md:p-8 bg-slate-50 min-h-full">
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
-                {isAdmin ? "Admin Dashboard" : "Staff Dashboard"}
-            </h1>
-            <p className="text-sm md:text-base text-slate-500 mb-6 md:mb-8">
-                {isAdmin ? "Overview of entire business performance." : "Your personal sales and activities summary."}
-            </p>
+        <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                <div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">
+                        {isAdmin ? "Command Center" : "Personal Dashboard"}
+                    </h1>
+                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">
+                        {isAdmin ? "Enterprise-wide sales & inventory telemetry" : "Individual performance & activity tracking"}
+                    </p>
+                </div>
+                
+                {/* SYNC INDICATOR */}
+                <div 
+                    className="flex items-center gap-4 bg-white px-5 py-3.5 rounded-2xl shadow-sm border border-slate-100 group cursor-pointer hover:bg-indigo-50 transition-all"
+                    onClick={() => syncData()}
+                >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:rotate-180 transition-transform duration-700 shadow-sm border border-indigo-100">
+                        <RefreshCw size={20} />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Node Sync</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            {lastSync ? `Updated ${new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not Syncing'}
+                        </p>
+                    </div>
+                </div>
+            </div>
 
             {lowStockProducts.length > 0 && (
-                <div className="bg-red-50 border border-red-300 text-red-800 p-4 rounded-xl mb-6 md:mb-8 flex items-start sm:items-center shadow-md">
-                    <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 mr-3 flex-shrink-0 mt-0.5 sm:mt-0" />
-                    <p className="text-sm sm:text-base font-semibold flex-grow">
-                        LOW STOCK ALERT: {lowStockProducts.length} product(s) below minimum stock level. 
-                        <span 
-                            className="block sm:inline text-red-600 font-bold sm:ml-2 mt-1 sm:mt-0 cursor-pointer hover:underline"
-                            onClick={() => onNavigate(isAdmin ? 'inventory' : 'stock')}
-                        >
-                            Review Inventory
-                        </span>
-                    </p>
+                <div className="bg-red-50 border border-red-100 text-red-900 p-6 rounded-[2rem] flex items-center shadow-lg shadow-red-100/50 animate-pulse">
+                    <div className="p-4 bg-white rounded-2xl shadow-sm text-red-600 mr-5">
+                        <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <div className="flex-grow">
+                        <p className="text-sm font-black uppercase tracking-widest">Inventory Depletion Alert</p>
+                        <p className="text-xs font-bold text-red-700/70 uppercase tracking-tight mt-1">{lowStockProducts.length} high-priority SKUs are currently below operational minimums.</p>
+                    </div>
+                    <button 
+                        onClick={() => onNavigate(isAdmin ? 'inventory' : 'stock')}
+                        className="bg-red-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+                    >
+                        Replenish
+                    </button>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard 
-                    title={isAdmin ? "Total Revenue" : "My Revenue"}
+                    title={isAdmin ? "Gross Revenue" : "My Revenue"}
                     value={revenue}
                     icon={DollarSign}
                     color="blue"
@@ -135,7 +164,7 @@ export const Dashboard = ({ onNavigate }: DashboardProps) => {
                     onClick={() => onNavigate('sales')}
                 />
                 <StatCard 
-                    title="Products in Stock"
+                    title="Active SKUs"
                     value={products.length}
                     icon={Package}
                     color="purple"
@@ -143,99 +172,86 @@ export const Dashboard = ({ onNavigate }: DashboardProps) => {
                 />
                 {isAdmin ? (
                     <StatCard 
-                        title="Active Staff"
-                        value={users.filter(u => u.isActive && u.role === Role.STAFF).length}
+                        title="Registered Nodes"
+                        value={users.filter(u => u.isActive).length}
                         icon={UsersIcon}
                         color="red"
-                        onClick={() => onNavigate('staff-management')}
+                        onClick={() => onNavigate('admin/staff-management')}
                     />
                 ) : (
                     <StatCard 
-                        title="Low Stock Items"
-                        value={lowStockProducts.length}
-                        icon={AlertTriangle}
+                        title="Health Status"
+                        value="OPERATIONAL"
+                        icon={ShieldCheck}
                         color="red"
-                        onClick={() => onNavigate('stock')}
+                        onClick={() => {}}
                     />
                 )}
             </div>
 
-            <Card className="mb-6 md:mb-8 p-6">
-                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    <TrendingUp size={20} className="text-indigo-600" /> 
-                    {isAdmin ? 'Revenue Trends' : 'My Performance Trends'} (Last 7 Days)
-                </h3>
-                <div style={{ width: '100%', height: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={last7Days} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                    {/* Updated Gradient Styling */}
-                                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                            <XAxis dataKey="date" stroke="#94a3b8" tick={{fontSize: 10, fontWeight: 600}} axisLine={false} tickLine={false} />
-                            <YAxis 
-                                stroke="#94a3b8" 
-                                tickFormatter={(value) => `₦${value > 1000 ? value/1000 + 'k' : value}`} 
-                                tick={{fontSize: 10, fontWeight: 600}}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <Tooltip 
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                formatter={(value: number) => [`₦${value.toLocaleString()}`, 'Revenue']}
-                            />
-                            <Area 
-                                type="monotone" 
-                                dataKey="revenue" 
-                                stroke="#4f46e5" 
-                                strokeWidth={3}
-                                fillOpacity={1} 
-                                fill="url(#colorRevenue)" 
-                                name="Revenue"
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-            </Card>
-
-            {/* Activity Feed Section now uses context directly */}
-            <div className="mb-6 md:mb-8">
-                <ActivityFeed maxItems={10} />
-            </div>
-
-            {/* Admin Quick Actions Section */}
-            {isAdmin && (
-                <div className="mt-6 md:mt-8">
-                    <h2 className="text-xl font-bold mb-4 text-slate-900">Admin Quick Actions</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap gap-3 md:gap-4">
-                        <button 
-                            className="flex items-center justify-center bg-white border border-slate-200 text-slate-700 font-bold px-6 py-4 rounded-xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all w-full md:w-auto"
-                            onClick={() => onNavigate('inventory')}
-                        >
-                            <Package className="w-5 h-5 mr-2 text-indigo-600" />
-                            Inventory Management
-                        </button>
-                        <button 
-                            className="flex items-center justify-center bg-white border border-slate-200 text-slate-700 font-bold px-6 py-4 rounded-xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all w-full md:w-auto"
-                            onClick={() => onNavigate('sales')}
-                        >
-                            <ShoppingCart className="w-5 h-5 mr-2 text-emerald-600" />
-                            Process New Sale
-                        </button>
-                        <button 
-                            className="flex items-center justify-center bg-white border border-slate-200 text-slate-700 font-bold px-6 py-4 rounded-xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all w-full md:w-auto"
-                            onClick={() => onNavigate('staff-management')}
-                        >
-                            <UsersIcon className="w-5 h-5 mr-2 text-red-500" />
-                            Team Management
-                        </button>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <Card className="lg:col-span-2 p-8 rounded-[2.5rem] border-0 shadow-2xl bg-white ring-1 ring-slate-100">
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <h3 className="font-black text-slate-900 text-sm uppercase tracking-[0.2em] flex items-center gap-2">
+                                <TrendingUp size={20} className="text-indigo-600" /> 
+                                Performance Telemetry
+                            </h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">7-Day revenue projection matrix</p>
+                        </div>
+                        <Badge color="blue" className="!px-4 !py-1.5 !rounded-xl !text-[9px]">Last 7 Cycles</Badge>
                     </div>
+                    <div style={{ width: '100%', height: 320 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={last7Days} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
+                                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <XAxis 
+                                    dataKey="date" 
+                                    stroke="#94a3b8" 
+                                    tick={{fontSize: 9, fontWeight: 800}} 
+                                    tickFormatter={(val: string) => val.toUpperCase()}
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    dy={10} 
+                                />
+                                <YAxis 
+                                    stroke="#94a3b8" 
+                                    tickFormatter={(value) => `₦${value >= 1000 ? value/1000 + 'k' : value}`} 
+                                    tick={{fontSize: 9, fontWeight: 800}}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    dx={-10}
+                                />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                <Tooltip 
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', background: '#1e293b', padding: '12px' }}
+                                    itemStyle={{ color: '#818cf8', fontSize: '12px', fontWeight: 'bold' }}
+                                    labelStyle={{ color: '#fff', fontSize: '10px', fontWeight: 'black', textTransform: 'uppercase', marginBottom: '4px', opacity: 0.6 }}
+                                    formatter={(value: number) => [`₦${value.toLocaleString()}`, 'Revenue']}
+                                />
+                                <Area 
+                                    type="monotone" 
+                                    dataKey="revenue" 
+                                    stroke="#4f46e5" 
+                                    strokeWidth={4}
+                                    fillOpacity={1} 
+                                    fill="url(#colorRevenue)" 
+                                    name="Revenue"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+
+                <div className="space-y-8">
+                    <ActivityFeed maxItems={8} />
                 </div>
-            )}
+            </div>
         </div>
     );
 };
