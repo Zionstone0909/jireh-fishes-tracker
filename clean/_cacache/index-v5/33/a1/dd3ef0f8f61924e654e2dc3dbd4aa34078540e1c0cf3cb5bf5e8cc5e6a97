@@ -1,0 +1,2 @@
+
+ad4eb71f4cc6b6b5a3e26d0e24b552e87c084706	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/http-status-codes","integrity":null,"time":1766545549233,"size":"0","metadata":{"time":1766545549233,"url":"http://registry.npmjs.org/http-status-codes","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:05:50 GMT","location":"https://registry.npmjs.org/http-status-codes","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

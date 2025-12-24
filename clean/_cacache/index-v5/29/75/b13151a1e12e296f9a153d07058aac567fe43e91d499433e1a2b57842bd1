@@ -1,0 +1,2 @@
+
+83bcb61a378fce09abbc0bf541df457a5b38c5ca	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/confbox","integrity":null,"time":1766545565464,"size":"0","metadata":{"time":1766545565464,"url":"http://registry.npmjs.org/confbox","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:07 GMT","location":"https://registry.npmjs.org/confbox","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

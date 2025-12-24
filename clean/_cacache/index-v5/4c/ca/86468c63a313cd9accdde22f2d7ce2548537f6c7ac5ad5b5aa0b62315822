@@ -1,0 +1,2 @@
+
+653e1e93ad487c99363ddc969d0298eefb1d8b8c	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/valibot","integrity":null,"time":1766545548212,"size":"0","metadata":{"time":1766545548212,"url":"http://registry.npmjs.org/valibot","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:05:49 GMT","location":"https://registry.npmjs.org/valibot","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

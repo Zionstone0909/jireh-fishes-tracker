@@ -4,20 +4,13 @@ import { useApp } from '../context/AppContext';
 import { Card, Table, Button, Input, Badge, BackButton, Select } from './Shared';
 import usePersistentState from '../hooks/usePersistentState';
 import ApiClient from '../services/ApiClient';
-import {
-  Plus, Filter, Download, X, DollarSign, PieChart,
-  TrendingUp, Search, Building, ArrowUpRight, ArrowDownLeft, UserCheck
-} from 'lucide-react';
+import { Plus, Download, X, DollarSign, Search, History, Loader2, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { Expense } from '../types';
 
 export const CompanyExpenses = ({ onBack }: { onBack?: () => void }) => {
   const { expenses, suppliers, addExpense, setExpenses } = useApp();
-
-  const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
 
   const initialFormState: Partial<Expense> = {
     type: 'EXPENSE',
@@ -33,183 +26,104 @@ export const CompanyExpenses = ({ onBack }: { onBack?: () => void }) => {
 
   const [formData, setFormData] = usePersistentState<Partial<Expense>>('CompanyExpenses.formData', initialFormState);
 
-  // Load initial data if not already present
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await ApiClient.get('/api/expenses');
-        setExpenses(data);
-      } catch (e) {
-        console.error("Failed to load expenses", e);
-      }
-    };
-    if (expenses.length === 0) load();
-  }, []);
-
-  const totalExpenses = expenses
-    .filter(e => e.type !== 'DEPOSIT')
-    .reduce((sum, item) => sum + item.amount, 0);
-
-  const totalDeposits = expenses
-    .filter(e => e.type === 'DEPOSIT')
-    .reduce((sum, item) => sum + item.amount, 0);
-
-  const netBalance = totalDeposits - totalExpenses;
-
-  const categories = [
-    'All', 'Utilities', 'Rent', 'Supplies', 'Payroll',
-    'Marketing', 'Software', 'Maintenance', 'Inventory/Supply',
-    'Supplier Payment', 'Income', 'Deposit'
-  ];
+  const totalExpenses = expenses.filter(e => e.type !== 'DEPOSIT').reduce((sum, item) => sum + item.amount, 0);
+  const totalDeposits = expenses.filter(e => e.type === 'DEPOSIT').reduce((sum, item) => sum + item.amount, 0);
 
   const filteredExpenses = useMemo(() => {
     return expenses
-      .filter(expense => {
-        const matchesSearch =
-          expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (expense.reference?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
-        const matchesCategory = categoryFilter === 'All' || expense.category === categoryFilter;
-        return matchesSearch && matchesCategory;
-      })
+      .filter(e => e.description.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [expenses, searchTerm, categoryFilter]);
+  }, [expenses, searchTerm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage('');
-
-    if (!formData.amount || !formData.description) {
-      setErrorMessage('Amount and Description are required.');
-      return;
-    }
+    if (!formData.amount || !formData.description) return;
 
     setLoading(true);
     try {
-      const savedExpense: Expense = await ApiClient.post('/api/expenses', {
-        ...formData,
-        recordedByName: 'Admin'
-      });
-      addExpense(savedExpense); 
+      await addExpense(formData as any); 
       setFormData(initialFormState);
-      setShowForm(false);
-      alert('Record saved successfully!');
-    } catch (err: any) {
-      setErrorMessage('Failed to save record. Please check connection.');
+      alert('Node Transaction Logged.');
     } finally {
       setLoading(false);
     }
   };
 
-  const exportData = () => {
-    const csvContent = [
-      ['Date', 'Type', 'Category', 'Description', 'Amount', 'Method', 'Reference', 'Status', 'RecordedBy'],
-      ...expenses.map(e => [
-        e.date, e.type, e.category, e.description, e.amount, e.paymentMethod, e.reference || '', e.status, e.recordedByName || ''
-      ])
-    ].map(row => row.join(',')).join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "financial_records.csv";
-    link.click();
-  };
-
   return (
-    <div className="space-y-6">
-      <BackButton onClick={onBack} />
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-10 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Financial Records</h1>
-          <p className="text-slate-500 text-sm font-medium">Monitoring Jireh Fishes cash flow and profitability.</p>
+           <BackButton onClick={onBack} />
+           <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Treasury Ledger</h1>
+           <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Operational expenditure tracking</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button onClick={exportData} variant="secondary">
-            <Download size={16} /> Export CSV
-          </Button>
-          <Button onClick={() => setShowForm(!showForm)} variant={showForm ? 'secondary' : 'danger'}>
-            {showForm ? <X size={16} /> : <Plus size={16} />} {showForm ? 'Close' : 'Add Expense'}
-          </Button>
+        <div className="flex gap-4 w-full md:w-auto">
+            <Card className="p-4 bg-red-50 border-red-100 flex-1 sm:w-48 text-center rounded-3xl">
+                <p className="text-[8px] font-black text-red-400 uppercase tracking-widest mb-1">Outflow</p>
+                <p className="text-lg font-black text-red-600">₦{totalExpenses.toLocaleString()}</p>
+            </Card>
+            <Card className="p-4 bg-emerald-50 border-emerald-100 flex-1 sm:w-48 text-center rounded-3xl">
+                <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Inflow</p>
+                <p className="text-lg font-black text-emerald-600">₦{totalDeposits.toLocaleString()}</p>
+            </Card>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-5 border-l-4 border-l-red-500">
-          <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Total Expenses</p>
-          <p className="text-2xl font-black text-slate-900">₦{totalExpenses.toLocaleString()}</p>
-        </Card>
-        <Card className="p-5 border-l-4 border-l-green-500">
-          <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Total Deposits</p>
-          <p className="text-2xl font-black text-slate-900">₦{totalDeposits.toLocaleString()}</p>
-        </Card>
-        <Card className={`p-5 border-l-4 ${netBalance >= 0 ? 'border-l-blue-500' : 'border-l-orange-500'}`}>
-          <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Net Balance</p>
-          <p className={`text-2xl font-black ${netBalance >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-            ₦{netBalance.toLocaleString()}
-          </p>
-        </Card>
-      </div>
+      {/* TOP FORM: FULL WIDTH COMMAND CENTER */}
+      <Card className="p-10 border-0 shadow-2xl relative overflow-hidden ring-1 ring-slate-100">
+          <div className="absolute top-0 left-0 w-full h-2 bg-red-600 opacity-40"></div>
+          <form onSubmit={handleSubmit} className="space-y-10">
+              <h3 className="font-black text-xs text-slate-800 uppercase tracking-[0.3em] flex items-center gap-3">
+                  <div className="p-3 bg-red-50 rounded-2xl text-red-600 shadow-sm"><DollarSign size={24} /></div> Post Operational Debit
+              </h3>
 
-      {showForm && (
-        <Card className="p-6 bg-slate-50 border-blue-100 animate-in fade-in slide-in-from-top-4">
-          <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">New Transaction</h3>
-          {errorMessage && <p className="text-red-600 text-xs mb-4 font-bold">{errorMessage}</p>}
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Input label="Date" type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
-            <Select label="Category" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-              {categories.filter(c => c !== 'All' && c !== 'Deposit' && c !== 'Income').map(c => <option key={c} value={c}>{c}</option>)}
-            </Select>
-            <Input label="Amount (₦)" type="number" value={formData.amount || ''} onChange={e => setFormData({ ...formData, amount: Number(e.target.value) })} required />
-            <Input label="Description" placeholder="e.g. Fuel for generator" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} required />
-            <Input label="Reference" placeholder="Receipt #" value={formData.reference || ''} onChange={e => setFormData({ ...formData, reference: e.target.value })} />
-            <Select label="Supplier" value={formData.supplierId} onChange={e => setFormData({ ...formData, supplierId: e.target.value })}>
-              <option value="">-- None --</option>
-              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
-            <div className="md:col-span-3 flex justify-end gap-2 mt-2">
-              <Button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Record'}</Button>
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                  <Input label="Audit Date" type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
+                  <Select label="Fiscal Category" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
+                      <option value="Utilities">Utilities</option>
+                      <option value="Rent">Facility Rent</option>
+                      <option value="Supplies">Staff Supplies</option>
+                      <option value="Logistics">Logistics / Fuel</option>
+                      <option value="Marketing">Growth / Marketing</option>
+                  </Select>
+                  <Input label="Net Amount (₦)" type="number" value={formData.amount || ''} onChange={e => setFormData({ ...formData, amount: Number(e.target.value) })} required />
+                  <Input label="Detail / Purpose" placeholder="Subject description..." value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} required />
+                  
+                  <div className="lg:col-span-4 flex justify-end">
+                      <Button type="submit" disabled={loading} size="lg" className="w-full md:w-auto !bg-slate-900 !rounded-[1.5rem]">
+                          {loading ? <Loader2 className="animate-spin" /> : 'Log Expenditure Node'}
+                      </Button>
+                  </div>
+              </div>
           </form>
-        </Card>
-      )}
+      </Card>
 
-      <Card className="overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <Input className="pl-9" placeholder="Search logs..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-          </div>
-          <div className="flex gap-1 overflow-x-auto w-full md:w-auto">
-            {['All', 'Utilities', 'Payroll', 'Supplies'].map(cat => (
-              <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${categoryFilter === cat ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}>{cat}</button>
-            ))}
-          </div>
+      <Card className="overflow-hidden border-0 shadow-lg animate-in slide-in-from-bottom-4 duration-700">
+        <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row gap-6 justify-between items-center bg-white">
+            <h3 className="font-black text-xs text-slate-800 uppercase tracking-widest flex items-center gap-3">
+                <History className="text-slate-400" /> Fiscal Timeline
+            </h3>
+            <div className="relative w-full md:w-80">
+                <Search className="w-4 h-4 absolute left-4 top-4 text-slate-400" />
+                <input placeholder="Search audit trails..." className="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            </div>
         </div>
-        <Table headers={['Date', 'Type', 'Description', 'Amount', 'Status', 'Recorded By']}>
-          {filteredExpenses.map(e => (
-            <tr key={e.id} className="hover:bg-slate-50 transition-colors">
-              <td className="px-6 py-4 text-xs font-medium text-slate-500">{new Date(e.date).toLocaleDateString()}</td>
-              <td className="px-6 py-4">
-                <Badge color={e.type === 'DEPOSIT' ? 'green' : 'red'}>{e.type}</Badge>
-              </td>
-              <td className="px-6 py-4">
-                <p className="text-sm font-bold text-slate-800">{e.description}</p>
-                <p className="text-[10px] text-slate-400 uppercase font-bold">{e.category}</p>
-              </td>
-              <td className={`px-6 py-4 text-sm font-black ${e.type === 'DEPOSIT' ? 'text-green-600' : 'text-red-500'}`}>
-                ₦{e.amount.toLocaleString()}
-              </td>
-              <td className="px-6 py-4">
-                <Badge color={e.status === 'Paid' ? 'blue' : 'orange'}>{e.status}</Badge>
-              </td>
-              <td className="px-6 py-4 text-xs text-slate-500 italic">
-                {e.recordedByName || 'System'}
-              </td>
-            </tr>
-          ))}
-        </Table>
+        <div className="overflow-x-auto">
+            <Table headers={['Date', 'Category', 'Description', 'Flux Sum', 'Status', 'Audit Agent']}>
+                {filteredExpenses.map(e => (
+                    <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-8 py-6 text-[10px] font-black text-slate-400 whitespace-nowrap uppercase tracking-widest">{new Date(e.date).toLocaleDateString()}</td>
+                        <td className="px-8 py-6"><Badge color={e.type === 'DEPOSIT' ? 'green' : 'red'}>{e.category}</Badge></td>
+                        <td className="px-8 py-6 text-sm font-black text-slate-800 tracking-tight">{e.description}</td>
+                        <td className={`px-8 py-6 text-base font-black ${e.type === 'DEPOSIT' ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {e.type === 'DEPOSIT' ? '+' : '-'}₦{e.amount.toLocaleString()}
+                        </td>
+                        <td className="px-8 py-6"><Badge color="blue">{e.status}</Badge></td>
+                        <td className="px-8 py-6 text-[10px] font-black text-indigo-700 uppercase tracking-widest whitespace-nowrap">{e.recordedByName || 'System'}</td>
+                    </tr>
+                ))}
+            </Table>
+        </div>
       </Card>
     </div>
   );

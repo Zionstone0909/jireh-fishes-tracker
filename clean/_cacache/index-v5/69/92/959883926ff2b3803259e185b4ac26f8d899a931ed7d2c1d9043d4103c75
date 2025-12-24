@@ -1,0 +1,2 @@
+
+583308fe4664e8440aa902d3fdc1adec16506593	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/lodash","integrity":null,"time":1766545589364,"size":"0","metadata":{"time":1766545589364,"url":"http://registry.npmjs.org/lodash","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:31 GMT","location":"https://registry.npmjs.org/lodash","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

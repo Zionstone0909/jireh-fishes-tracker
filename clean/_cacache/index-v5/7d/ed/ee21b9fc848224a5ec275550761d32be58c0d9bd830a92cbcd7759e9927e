@@ -1,0 +1,2 @@
+
+f4c1614cf1f86f3c7a2a65c162c65809e63c0cb9	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/pure-rand","integrity":null,"time":1766545592121,"size":"0","metadata":{"time":1766545592120,"url":"http://registry.npmjs.org/pure-rand","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:33 GMT","location":"https://registry.npmjs.org/pure-rand","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

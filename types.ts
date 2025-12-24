@@ -9,6 +9,7 @@ export enum Role {
   STAFF = 'STAFF'
 }
 
+export type CustomerType = 'Retail' | 'Wholesale' | 'Distributor';
 export type UserSystemStatus = 'OPERATIONAL' | 'SUSPENDED' | 'ON_HOLD';
 
 export interface Transaction {
@@ -25,6 +26,9 @@ export interface Customer {
   name: string;
   phone: string;
   email: string;
+  address: string;
+  type: CustomerType;
+  notes?: string;
   balance: number;
   totalSpent: number;
   lastVisit: string;

@@ -1,0 +1,2 @@
+
+a050b48ed2ad665dbd49662b29bb890c0e5de93b	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/effect/-/effect-3.18.4.tgz","integrity":null,"time":1766545597260,"size":"0","metadata":{"time":1766545597259,"url":"http://registry.npmjs.org/effect/-/effect-3.18.4.tgz","reqHeaders":{},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:38 GMT","location":"https://registry.npmjs.org/effect/-/effect-3.18.4.tgz","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

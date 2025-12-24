@@ -1,0 +1,2 @@
+
+bbd195499fd734acaf7f6ff7d5668d7c99d92524	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/exsolve","integrity":null,"time":1766545566017,"size":"0","metadata":{"time":1766545566016,"url":"http://registry.npmjs.org/exsolve","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:07 GMT","location":"https://registry.npmjs.org/exsolve","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

@@ -1,0 +1,2 @@
+
+456e21d3771830e0bb93f6519f9fd4f592d09205	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/empathic","integrity":null,"time":1766545546356,"size":"0","metadata":{"time":1766545546356,"url":"http://registry.npmjs.org/empathic","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:05:48 GMT","location":"https://registry.npmjs.org/empathic","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

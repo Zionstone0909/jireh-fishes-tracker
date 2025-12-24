@@ -1,0 +1,2 @@
+
+37e60225d6b0f9966cf7d393fe1af4e5de0b2844	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/grammex/-/grammex-3.1.12.tgz","integrity":null,"time":1766545597403,"size":"0","metadata":{"time":1766545597403,"url":"http://registry.npmjs.org/grammex/-/grammex-3.1.12.tgz","reqHeaders":{},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:38 GMT","location":"https://registry.npmjs.org/grammex/-/grammex-3.1.12.tgz","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

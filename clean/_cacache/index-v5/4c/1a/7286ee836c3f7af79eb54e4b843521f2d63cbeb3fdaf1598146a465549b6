@@ -1,0 +1,2 @@
+
+e449c857a02ec4731a5c7ab6b5be07c48a2a294a	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/@chevrotain%2fgast","integrity":null,"time":1766545588951,"size":"0","metadata":{"time":1766545588951,"url":"http://registry.npmjs.org/@chevrotain%2fgast","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:30 GMT","location":"https://registry.npmjs.org/@chevrotain%2Fgast","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

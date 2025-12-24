@@ -1,0 +1,2 @@
+
+ad467a66e31e681fe160ab38c579841e18208b94	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/perfect-debounce","integrity":null,"time":1766545566246,"size":"0","metadata":{"time":1766545566246,"url":"http://registry.npmjs.org/perfect-debounce","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:07 GMT","location":"https://registry.npmjs.org/perfect-debounce","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Card, Button, Input, BackButton, Table, Badge, Select } from './Shared';
 import usePersistentState from '../hooks/usePersistentState';
+import ApiClient from '../services/ApiClient';
 import { DollarSign, Save, UserCheck, Search, History, Loader2 } from 'lucide-react';
 import { Expense } from '../types';
 
 export const BankDeposit = ({ onBack }: { onBack?: () => void }) => {
-  // addExpense should handle the API POST and updating the global 'expenses' state
   const { addExpense, expenses, user } = useApp();
   const [loading, setLoading] = useState(false);
   
@@ -17,11 +18,8 @@ export const BankDeposit = ({ onBack }: { onBack?: () => void }) => {
     reference: '',
     paymentMethod: 'Bank Transfer'
   });
-  
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Filtering global expenses for DEPOSITS 
-  // This updates automatically when addExpense is called
   const deposits = useMemo(() => {
     return expenses
       .filter(e => e.type === 'DEPOSIT')
@@ -38,11 +36,10 @@ export const BankDeposit = ({ onBack }: { onBack?: () => void }) => {
 
     setLoading(true);
     try {
-      // Map form to the API structure
       const depositData: Omit<Expense, 'id'> = {
         type: 'DEPOSIT',
         date: formData.date,
-        category: 'Income', // Default category for deposits
+        category: 'Income',
         description: formData.description,
         amount: Number(formData.amount),
         paymentMethod: formData.paymentMethod,
@@ -51,116 +48,98 @@ export const BankDeposit = ({ onBack }: { onBack?: () => void }) => {
         recordedByName: user?.name || 'Admin'
       };
 
-      // This call updates the Database via API and then updates the AppContext state
       await addExpense(depositData);
       
-      // Clear specific form fields but keep the date for convenience
+      alert('Deposit recorded and synchronized.');
       setFormData({
-        ...formData,
+        date: new Date().toISOString().split('T')[0],
         amount: '',
         description: '',
         reference: '',
+        paymentMethod: 'Bank Transfer'
       });
-
-      alert('Deposit successfully synchronized with company expenses.');
     } catch (err: any) {
-      alert(`Sync Error: ${err.message}`);
+      alert(`Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-10 animate-in fade-in duration-300">
       <BackButton onClick={onBack} />
-      
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Bank Deposit Registry</h1>
-          <p className="text-sm font-medium text-slate-500">Document income and capital inflows to the business account.</p>
-        </div>
+      <div>
+          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Bank Deposit Registry</h1>
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Capital inflow documentation</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* FORM SECTION */}
-          <div className="lg:col-span-1">
-            <Card className="p-4 sm:p-6 border-t-4 border-t-emerald-500 shadow-xl sticky top-6">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <h3 className="font-black text-xs text-slate-800 uppercase tracking-[0.2em] flex items-center gap-2 mb-6">
-                        <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
-                            <DollarSign className="w-4 h-4" />
-                        </div>
-                        New Inflow Entry
-                    </h3>
+      <Card className="p-10 border-0 shadow-2xl bg-white rounded-[3rem] relative overflow-hidden ring-1 ring-slate-100">
+          <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+              <h3 className="font-black text-xs text-slate-800 uppercase tracking-[0.3em] flex items-center gap-3">
+                  <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 border border-emerald-100 shadow-sm">
+                      <DollarSign className="w-6 h-6" />
+                  </div>
+                  New Cash Inflow Entry
+              </h3>
 
-                    <Input label="Date" type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required />
-                    <Input label="Amount (₦)" type="number" step="0.01" placeholder="0.00" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} required />
-                    <Input label="Description / Source" placeholder="Daily Sales, Capital, etc." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required />
-                    <Select label="Payment Mode" value={formData.paymentMethod} onChange={(e) => setFormData({...formData, paymentMethod: e.target.value})}>
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="Cash Deposit">Cash Deposit</option>
-                        <option value="POS Collection">POS Collection</option>
-                        <option value="Check">Check</option>
-                    </Select>
-                    <Input label="Reference / Slip #" placeholder="Optional receipt ID" value={formData.reference} onChange={(e) => setFormData({...formData, reference: e.target.value})} />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  <Input label="AUDIT DATE" type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required className="!rounded-2xl !py-3.5" />
+                  <Input label="AMOUNT (₦)" type="number" step="0.01" placeholder="0.00" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} required className="!rounded-2xl !py-3.5" />
+                  <Select label="COLLECTION CHANNEL" value={formData.paymentMethod} onChange={(e) => setFormData({...formData, paymentMethod: e.target.value})} className="!rounded-2xl !py-3.5">
+                      <option>Bank Transfer</option>
+                      <option>Cash Deposit</option>
+                      <option>POS Collection</option>
+                      <option>Check</option>
+                  </Select>
+                  <div className="md:col-span-2 lg:col-span-1">
+                      <Input label="DESCRIPTION / SOURCE" placeholder="Daily Sales, Capital, etc." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required className="!rounded-2xl !py-3.5" />
+                  </div>
+                  <Input label="REFERENCE / SLIP #" placeholder="Optional receipt ID" value={formData.reference} onChange={(e) => setFormData({...formData, reference: e.target.value})} className="!rounded-2xl !py-3.5" />
+                  
+                  <div className="flex items-end">
+                      <Button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-5 font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl shadow-emerald-100 rounded-2xl active:scale-95 transition-all">
+                          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Commit Deposit</>}
+                      </Button>
+                  </div>
+              </div>
+          </form>
+      </Card>
 
-                    <Button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 mt-4 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-100">
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Record Deposit</>}
-                    </Button>
-                </form>
-            </Card>
+      <Card className="overflow-hidden border-0 shadow-xl rounded-[2.5rem] bg-white ring-1 ring-slate-50">
+          <div className="p-8 border-b border-slate-50 flex flex-col sm:flex-row justify-between items-center gap-6 bg-slate-50/30">
+              <h3 className="font-black text-xs text-slate-800 uppercase tracking-widest flex items-center gap-3">
+                  <History className="w-5 h-5 text-slate-400" /> Recent Node Handshakes
+              </h3>
+              <div className="relative w-full sm:w-80">
+                  <Search className="w-4 h-4 absolute left-4 top-4 text-slate-400" />
+                  <input placeholder="Search audit logs..." className="w-full pl-11 pr-4 py-3.5 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              </div>
           </div>
-
-          {/* HISTORY TABLE SECTION */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
-                    <h3 className="font-black text-xs text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                        <History className="w-4 h-4 text-slate-400" /> Recent Deposits
-                    </h3>
-                    <div className="relative w-full sm:w-64">
-                        <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                        <Input placeholder="Search logs..." className="pl-10 w-full rounded-xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                    </div>
-                </div>
-                
-                <div className="overflow-x-auto">
-                    <Table headers={['Date', 'Description', 'Reference', 'Amount', 'Method', 'Logged By']}>
-                        {deposits.map(deposit => (
-                            <tr key={deposit.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50">
-                                <td className="px-6 py-4 text-[10px] font-black text-slate-400 whitespace-nowrap uppercase">
-                                  {new Date(deposit.date).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 text-sm font-bold text-slate-900">{deposit.description}</td>
-                                <td className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                                  {deposit.reference || '-'}
-                                </td>
-                                <td className="px-6 py-4 text-sm font-black text-emerald-600 whitespace-nowrap">
-                                  ₦{Number(deposit.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <Badge color="green">{deposit.paymentMethod}</Badge>
-                                </td>
-                                <td className="px-6 py-4 text-[10px] font-black text-indigo-600 uppercase tracking-widest whitespace-nowrap">
-                                    <div className="flex items-center gap-1.5">
-                                        <UserCheck className="w-3 h-3" />
-                                        <span>{deposit.recordedByName || 'System'}</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {deposits.length === 0 && (
-                            <tr>
-                              <td colSpan={6} className="px-6 py-16 text-center text-slate-300 font-bold uppercase tracking-widest italic text-xs">
-                                No bank deposits documented.
-                              </td>
-                            </tr>
-                        )}
-                    </Table>
-                </div>
-            </Card>
+          
+          <div className="overflow-x-auto no-scrollbar">
+              <Table headers={['Audit Date', 'Subject Description', 'Log Reference', 'Amount Delta', 'Channel', 'Logged By']}>
+                  {deposits.map(deposit => (
+                      <tr key={deposit.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0">
+                          <td className="px-8 py-6 text-[10px] font-black text-slate-400 whitespace-nowrap uppercase tracking-widest">{new Date(deposit.date).toLocaleDateString()}</td>
+                          <td className="px-8 py-6 text-sm font-black text-slate-800">{deposit.description}</td>
+                          <td className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{deposit.reference || '-'}</td>
+                          <td className="px-8 py-6 text-base font-black text-emerald-600 whitespace-nowrap tracking-tight">₦{deposit.amount.toLocaleString()}</td>
+                          <td className="px-8 py-6 whitespace-nowrap"><Badge color="green" className="!px-3 !py-1">{deposit.paymentMethod}</Badge></td>
+                          <td className="px-8 py-6 text-[10px] font-black text-indigo-700 uppercase tracking-widest whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                  <UserCheck className="w-4 h-4" />
+                                  <span>{deposit.recordedByName || 'System'}</span>
+                              </div>
+                          </td>
+                      </tr>
+                  ))}
+                  {deposits.length === 0 && (
+                      <tr><td colSpan={6} className="px-8 py-32 text-center text-slate-300 font-black uppercase tracking-[0.5em] text-[10px]">Registry is empty</td></tr>
+                  )}
+              </Table>
           </div>
-      </div>
+      </Card>
     </div>
   );
 };

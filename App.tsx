@@ -1,322 +1,454 @@
 
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { AppProvider, useApp } from './context/AppContext';
-import { useSyncData } from './hooks/useSyncData';
-import { Role } from './types';
-import { Settings } from './components/Settings';
-import { Customers } from './components/Customers';
-import { SupplierManagement } from './components/SupplierManagement';
-import { CustomerLedger } from './components/CustomerLedger';
-import { SupplierLedger } from './components/SupplierLedger';
-import { LoginPage } from './components/LoginPage';
-import { JoinPage } from './components/JoinPage';
-
-// --- Shared Components ---
-import { Loader2 } from 'lucide-react';
-
-// --- Imports ---
-import { Dashboard } from './components/Dashboard'; 
-import { Inventory } from './components/Inventory';
-import { Stock } from './components/Stock';
-import { Sales } from './components/Sales';
-import { CompanyExpenses } from './components/CompanyExpenses';
-import { BankDeposit } from './components/BankDeposit';
-import { Payroll } from './components/Payroll';
-import { Reports } from './components/Reports';
-import { StaffManagement } from './components/StaffManagement';
-import { Staff } from './components/Staff';
-
+import React, { useState, useMemo, useEffect } from 'react';
+import { useApp } from './context/AppContext';
+import usePersistentState from './hooks/usePersistentState';
+import { Card, Button, Input, Badge, Table, Select } from './components/Shared';
+import { CustomerSearchHeader } from './components/Customers';
 import { 
-  ShoppingCart, 
-  LayoutDashboard, 
-  LogOut, 
-  Menu, 
-  User as UserIcon, 
-  X,
-  ChevronRight,
-  Package,
-  DollarSign,
-  Briefcase,
-  Users,
-  FileText,
-  CreditCard,
-  Settings as SettingsIcon,
-  Truck,
-  BookOpen,
-  Zap,
-  UserCheck
+  Plus, Search, Trash2, ShoppingCart, 
+  User as UserIcon, X, UserCheck, RefreshCw, 
+  PackageOpen, Fish, Receipt 
 } from 'lucide-react';
+import { SaleItem, Customer, Role } from './types';
+import { useNavigate } from 'react-router-dom';
 
-// --- Layout & Navigation ---
-export const Layout = () => {
-  const { user, products, logout } = useApp();
+export const Sales = () => {
+  const { products, user, addSale, sales, customers } = useApp();
   const isAdmin = user?.role === Role.ADMIN;
   const navigate = useNavigate();
-  const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  const [activeTab, setActiveTab] = usePersistentState<'pos' | 'history'>('Sales.activeTab', 'pos');
+  
+  // POS State
+  const [cart, setCart] = usePersistentState<SaleItem[]>('Sales.cart', []);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = usePersistentState<Customer | null>('Sales.selectedCustomer', null);
+  const [amountPaid, setAmountPaid] = usePersistentState<string>('Sales.amountPaid', '');
+  const [paymentMethod, setPaymentMethod] = usePersistentState('Sales.paymentMethod', 'Cash');
+  
+  // History State
+  const [historySearch, setHistorySearch] = useState('');
 
-  const lowStockProducts = products.filter(p => p.quantity <= p.minStockLevel);
+  const cartTotal = cart.reduce((acc, item) => acc + (item.subtotal || 0), 0);
+  
+  useEffect(() => {
+     if (cartTotal > 0 && (!amountPaid || amountPaid === '0' || amountPaid === '')) {
+         setAmountPaid(cartTotal.toFixed(2));
+     }
+  }, [cartTotal]);
 
-  const menuItems = [
-    { name: "Dashboard", href: "/dashboard", icon: <LayoutDashboard className="w-5 h-5" />, roles: [Role.ADMIN, Role.STAFF] },
-    { type: 'header', label: 'Trading Desk' },
-    { name: "Sales POS", href: isAdmin ? "/admin/sales" : "/staff/sales", icon: <Zap className="w-5 h-5" />, roles: [Role.ADMIN, Role.STAFF] },
-    { name: "Inventory", href: "/admin/inventory", icon: <Package className="w-5 h-5" />, roles: [Role.ADMIN] },
-    { name: "Stock Matrix", href: "/admin/stock", icon: <Truck className="w-5 h-5" />, roles: [Role.ADMIN], badge: lowStockProducts.length },
-    { name: "Stock View", href: "/staff/stock", icon: <Package className="w-5 h-5" />, roles: [Role.STAFF] },
+  const filteredProducts = useMemo(() => {
+    const s = searchTerm.toLowerCase();
+    return products.filter(p => 
+      p.name.toLowerCase().includes(s) || 
+      p.sku.toLowerCase().includes(s)
+    );
+  }, [products, searchTerm]);
+
+  const addToCart = (product: any) => {
+    if (product.quantity <= 0) {
+        alert("Out of Stock!");
+        return;
+    }
     
-    { type: 'header', label: 'Stakeholders' },
-    { name: "Customers", href: isAdmin ? "/admin/customers" : "/staff/customers", icon: <Users className="w-5 h-5" />, roles: [Role.ADMIN, Role.STAFF] },
-    { name: "Customer Ledger", href: isAdmin ? "/admin/customer-ledger" : "/staff/customer-ledger", icon: <BookOpen className="w-5 h-5" />, roles: [Role.ADMIN, Role.STAFF] },
-    { name: "Suppliers", href: "/admin/suppliers", icon: <Truck className="w-5 h-5" />, roles: [Role.ADMIN] },
-    { name: "Supplier Ledger", href: "/admin/supplier-ledger", icon: <FileText className="w-5 h-5" />, roles: [Role.ADMIN] },
+    setCart(prev => {
+      const existing = prev.find(item => item.productId === product.id);
+      const currentQtyInCart = existing ? existing.quantity : 0;
+      
+      if (currentQtyInCart + 1 > product.quantity) {
+          alert(`Insufficient Inventory. Only ${product.quantity} available.`);
+          return prev;
+      }
 
-    { type: 'header', label: 'Personnel' },
-    { name: "Staff Roster", href: isAdmin ? "/admin/staff-roster" : "/staff/staff-roster", icon: <UserCheck className="w-5 h-5" />, roles: [Role.ADMIN, Role.STAFF] },
-    { name: "Payroll Hub", href: "/admin/payroll", icon: <CreditCard className="w-5 h-5" />, roles: [Role.ADMIN] },
-    { name: "Access Control", href: "/admin/staff-management", icon: <SettingsIcon className="w-5 h-5" />, roles: [Role.ADMIN] },
+      if (existing) {
+        return prev.map(item => 
+          item.productId === product.id 
+            ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.price }
+            : item
+        );
+      }
+      return [...prev, { 
+        productId: product.id, 
+        productName: product.name, 
+        quantity: 1, 
+        price: product.price, 
+        subtotal: product.price 
+      }];
+    });
+  };
 
-    { type: 'header', label: 'Treasury' },
-    { name: "Expenses", href: "/admin/company-expenses", icon: <DollarSign className="w-5 h-5" />, roles: [Role.ADMIN] },
-    { name: "Bank Deposits", href: "/admin/bank-deposit", icon: <Briefcase className="w-5 h-5" />, roles: [Role.ADMIN] },
-    { name: "BI Reports", href: isAdmin ? "/admin/reports" : "/staff/reports", icon: <FileText className="w-5 h-5" />, roles: [Role.ADMIN, Role.STAFF] },
-  ];
+  const updateCartItem = (productId: string, field: 'quantity' | 'price', value: number) => {
+     setCart(prev => prev.map(item => {
+         if (item.productId === productId) {
+             const product = products.find(p => p.id === productId);
+             let newQty = item.quantity;
+             let newPrice = item.price;
 
-  const filteredItems = menuItems.filter(item => {
-    if (item.type === 'header') return true;
-    return item.roles?.includes(user?.role || Role.STAFF);
-  });
+             if (field === 'quantity') {
+                 if (product && value > product.quantity) {
+                     alert(`Maximum Inventory Reached: ${product.quantity} available.`);
+                     newQty = product.quantity;
+                 } else {
+                     newQty = Math.max(1, value);
+                 }
+             }
+             
+             if (field === 'price') {
+                 newPrice = Math.max(0, value);
+             }
 
-  const getPageTitle = () => {
-    if (location.pathname === '/' || location.pathname === '/dashboard') return 'Overview';
-    const segment = location.pathname.split('/').pop();
-    return segment ? segment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'System';
+             return {
+                 ...item,
+                 quantity: newQty,
+                 price: newPrice,
+                 subtotal: newQty * newPrice
+             };
+         }
+         return item;
+     }));
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(prev => prev.filter(item => item.productId !== productId));
+  };
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    
+    for (const item of cart) {
+        const p = products.find(prod => prod.id === item.productId);
+        if (p && p.quantity < item.quantity) {
+            alert(`Stock level for ${p.name} changed. Only ${p.quantity} left. Please adjust cart.`);
+            return;
+        }
+    }
+
+    const paid = Number(amountPaid);
+    const newSale: any = {
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
+      total: cartTotal,
+      amountPaid: paid,
+      items: [...cart],
+      initiatedBy: user!.id,
+      initiatedByName: user!.name,
+      customerName: selectedCustomer ? selectedCustomer.name : 'Walk-in Customer',
+      customerId: selectedCustomer?.id,
+      paymentMethod: paymentMethod
+    };
+    
+    try {
+        await addSale(newSale);
+        setCart([]);
+        setSelectedCustomer(null);
+        setAmountPaid('');
+        setPaymentMethod('Cash');
+        alert('Transaction committed. Inventory updated globally.');
+    } catch (err: any) {
+        alert(`Checkout Failed: ${err.message}`);
+    }
+  };
+
+  const balanceDue = Math.max(0, cartTotal - Number(amountPaid));
+  const changeDue = Math.max(0, Number(amountPaid) - cartTotal);
+
+  const filteredSales = useMemo(() => {
+    const s = historySearch.toLowerCase();
+    return sales.filter(sale => 
+      sale.id.includes(s) ||
+      (sale.initiatedByName || '').toLowerCase().includes(s) ||
+      (sale.customerName && sale.customerName.toLowerCase().includes(s))
+    );
+  }, [sales, historySearch]);
+
+  const goToLedger = (customerId: string) => {
+    localStorage.setItem('last_ledger_customer', customerId);
+    navigate(isAdmin ? '/admin/customer-ledger' : '/staff/customer-ledger');
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans overflow-hidden">
-      {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/60 z-40 md:hidden backdrop-blur-md transition-opacity duration-300"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Main Sidebar */}
-      <aside 
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-500 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static shrink-0 flex flex-col shadow-2xl md:shadow-none`}
-        style={{ height: '100vh' }}
-      >
-        <div className="h-20 flex items-center gap-4 px-6 border-b border-slate-100 shrink-0">
-           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-2xl shadow-indigo-200 text-white transform rotate-3">
-              <Zap className="w-6 h-6" fill="currentColor" />
-           </div>
-           <div className="min-w-0">
-              <h1 className="font-black text-xl text-slate-900 leading-none tracking-tight truncate uppercase">Jireh Fishes</h1>
-              <p className="text-[10px] text-slate-400 font-black tracking-[0.25em] uppercase mt-1.5 flex items-center gap-1.5">
-                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> CORE-01
-              </p>
-           </div>
-           <button onClick={() => setSidebarOpen(false)} className="md:hidden ml-auto p-2.5 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-2xl transition-all">
-             <X className="w-5 h-5" />
-           </button>
+    <div className="space-y-6 animate-in fade-in duration-500 overflow-hidden" style={{ minHeight: 'calc(100vh - 120px)' }}>
+      {/* Tab Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-2">
+        <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar">
+            <button 
+                className={`px-4 py-3 font-black text-[10px] uppercase tracking-[0.25em] transition-all whitespace-nowrap border-b-2 ${activeTab === 'pos' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-800'}`}
+                onClick={() => setActiveTab('pos')}
+            >
+                Point of Sale
+            </button>
+            <button 
+                className={`px-4 py-3 font-black text-[10px] uppercase tracking-[0.25em] transition-all whitespace-nowrap border-b-2 ${activeTab === 'history' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-800'}`}
+                onClick={() => setActiveTab('history')}
+            >
+                Audit History
+            </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto py-8 px-4 space-y-1 no-scrollbar scroll-smooth">
-            {filteredItems.map((item: any, index) => {
-              if (item.type === 'header') {
-                return (
-                  <div key={index} className="px-5 mt-10 mb-3">
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">{item.label}</p>
-                  </div>
-                );
-              }
-
-              const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(`${item.href}`));
-              
-              return (
-                <button 
-                  key={index}
-                  onClick={() => {
-                    navigate(item.href);
-                    setSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3.5 px-5 py-3.5 rounded-2xl transition-all duration-300 group relative ${
-                    isActive 
-                      ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 font-bold scale-[1.02]' 
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <span className={`transition-all duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110 group-hover:text-indigo-600'}`}>
-                    {item.icon}
-                  </span>
-                  <span className="flex-1 text-left text-sm tracking-tight">{item.name}</span>
-                  
-                  {item.badge > 0 && (
-                     <span className={`flex items-center justify-center text-[10px] font-black h-5 min-w-[20px] px-2 rounded-full shadow-sm animate-pulse ${isActive ? 'bg-white text-indigo-600' : 'bg-red-50 text-white'}`}>
-                        {item.badge}
-                     </span>
-                  )}
-                </button>
-              );
-            })}
-        </div>
-
-        <div className="p-6 border-t border-slate-100 bg-slate-50/30">
-           <div className="flex items-center gap-3.5 px-3 mb-6">
-              <div className="w-11 h-11 rounded-2xl bg-white border-2 border-slate-100 shadow-md flex items-center justify-center text-indigo-600 font-bold overflow-hidden transition-transform hover:scale-105">
-                 <UserIcon className="w-7 h-7" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-black text-slate-900 truncate tracking-tight uppercase">{user?.name}</p>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  {user?.role}
-                </p>
-              </div>
-           </div>
-           <button 
-             onClick={logout}
-             className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-2xl bg-white border border-slate-200 text-slate-700 font-black uppercase text-[10px] tracking-widest hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all shadow-sm hover:shadow-red-50"
-           >
-             <LogOut className="w-4 h-4" /> 
-             <span>Sign Out</span>
-           </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
-        <header className="bg-white/90 backdrop-blur-xl border-b border-slate-200 sticky top-0 z-30 px-6 sm:px-10 h-20 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-5">
-             <button onClick={() => setSidebarOpen(true)} className="md:hidden p-3 -ml-3 text-slate-500 hover:bg-slate-100 rounded-2xl transition-all">
-               <Menu className="w-6 h-6" />
-             </button>
-             <div>
-               <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight uppercase">
-                  {getPageTitle()}
-               </h2>
-               <p className="hidden sm:block text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-               </p>
-             </div>
-          </div>
-          <div className="flex items-center gap-3 sm:gap-6">
-             <div className="hidden lg:flex items-center gap-2.5 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-2xl border border-indigo-100 shadow-sm">
-               <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
-               <span className="text-[10px] font-black uppercase tracking-widest">Global Link Active</span>
-             </div>
-             <button onClick={() => navigate('/settings')} className="p-3 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 rounded-2xl transition-all shadow-sm group">
-                <SettingsIcon className="w-5 h-5 group-hover:rotate-45 transition-transform" />
-             </button>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-6 sm:p-10 no-scrollbar scroll-smooth bg-slate-50/50">
-           <div className="max-w-7xl w-full mx-auto pb-10">
-             <Outlet />
-           </div>
-        </main>
+        
+        {activeTab === 'pos' && (
+             <div className="w-full md:w-96">
+                <CustomerSearchHeader 
+                    customers={customers}
+                    placeholder="Assign client entity..."
+                    onSelect={(c) => setSelectedCustomer(c)}
+                    selectedCustomerId={selectedCustomer?.id}
+                />
+            </div>
+        )}
       </div>
+
+      {activeTab === 'pos' ? (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+          {/* Inventory Selection (Left Column - 7/12 width) */}
+          <div className="xl:col-span-7 flex flex-col gap-6">
+            <div className="relative shrink-0">
+                <Search className="w-5 h-5 absolute left-5 top-5 text-slate-400" />
+                <input 
+                  className="w-full pl-14 pr-6 py-4.5 border border-slate-200 rounded-[2rem] focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none transition-all font-bold text-base bg-white shadow-xl"
+                  placeholder="Scan SKU or search product catalog..." 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            
+            <div 
+              className="flex-1 overflow-y-auto pr-2 scroll-smooth no-scrollbar"
+              style={{ maxHeight: 'calc(100vh - 350px)' }}
+            >
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 pb-8">
+                    {filteredProducts.map(product => (
+                        <div 
+                            key={product.id} 
+                            className={`p-5 bg-white border border-slate-100 rounded-[2rem] flex flex-col justify-between shadow-sm transition-all group ${product.quantity > 0 ? 'hover:shadow-2xl cursor-pointer hover:border-indigo-400 hover:-translate-y-1' : 'opacity-60 cursor-not-allowed bg-slate-50'}`}
+                            onClick={() => addToCart(product)}
+                        >
+                            <div className="mb-4">
+                                <div className="flex justify-between items-start mb-3">
+                                    <Badge color={product.quantity > product.minStockLevel ? 'green' : 'red'}>
+                                        Qty: {product.quantity}
+                                    </Badge>
+                                </div>
+                                <h4 className="font-black text-slate-900 text-sm leading-tight group-hover:text-indigo-600 transition-colors h-10 line-clamp-2">{product.name}</h4>
+                                <p className="text-[10px] text-slate-400 font-mono mt-2 uppercase tracking-tighter truncate">{product.sku}</p>
+                            </div>
+                            <div className="flex justify-between items-end border-t border-slate-50 pt-4">
+                                <span className="text-xl font-black text-slate-900 tracking-tighter">₦{product.price.toLocaleString()}</span>
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${product.quantity > 0 ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 group-hover:scale-110 active:scale-95' : 'bg-slate-200 text-slate-400'}`}>
+                                    <Plus className="w-5 h-5" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {filteredProducts.length === 0 && (
+                        <div className="col-span-full py-32 text-center text-slate-300">
+                            <PackageOpen className="w-20 h-20 mx-auto mb-4 opacity-10" />
+                            <p className="text-[11px] font-black uppercase tracking-[0.5em]">No nodes found</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+          </div>
+
+          {/* Cart & Checkout (Right Column - 5/12 width) */}
+          <div className="xl:col-span-5">
+            <Card 
+                className="flex flex-col h-full bg-white rounded-[3rem] overflow-hidden shadow-2xl border-0 ring-1 ring-slate-100 sticky top-32"
+                style={{ maxHeight: 'calc(100vh - 200px)' }}
+            >
+                <div className="p-8 bg-slate-50/50 border-b border-slate-100 shrink-0">
+                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 mb-6">
+                        <span className="flex items-center gap-1.5"><UserCheck className="w-3.5 h-3.5" /> Staff: {user?.name}</span>
+                        <span className="flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5" /> Sync Active</span>
+                    </div>
+                    {selectedCustomer ? (
+                        <div className="flex justify-between items-center bg-white p-5 rounded-2xl border border-indigo-100 shadow-xl animate-in zoom-in-95 duration-300">
+                            <div className="flex items-center gap-4 min-w-0">
+                                <div className="bg-indigo-600 p-3 rounded-xl text-white shadow-xl shadow-indigo-100 shrink-0">
+                                    <UserIcon className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="font-black text-slate-900 text-sm truncate tracking-tight">{selectedCustomer.name}</p>
+                                    <div className="flex gap-4 mt-1">
+                                        <button 
+                                            onClick={() => goToLedger(selectedCustomer.id)}
+                                            className="text-[10px] text-indigo-600 font-black uppercase hover:underline tracking-widest"
+                                        >
+                                            View Ledger
+                                        </button>
+                                        <span className={`text-[10px] font-black uppercase tracking-widest ${selectedCustomer.balance > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                            Bal: ₦{selectedCustomer.balance.toLocaleString()}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onClick={() => setSelectedCustomer(null)} className="text-slate-300 hover:text-red-500 transition-colors p-2 shrink-0">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="text-center p-6 text-slate-400 bg-white/50 border border-dashed border-slate-200 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.4em]">
+                            Walk-in Client Node
+                        </div>
+                    )}
+                </div>
+
+                <div 
+                    className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar"
+                    style={{ minHeight: '200px' }}
+                >
+                    {cart.map(item => (
+                        <div key={item.productId} className="flex gap-5 border-b border-slate-50 pb-6 last:border-0 group">
+                            <div className="flex-1 min-w-0">
+                                <p className="font-black text-sm text-slate-900 truncate tracking-tight">{item.productName}</p>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-3">
+                                    <div className="flex items-center bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-inner">
+                                        <button className="px-4 py-2 text-slate-500 hover:bg-slate-200 transition-colors font-black" onClick={() => updateCartItem(item.productId, 'quantity', item.quantity - 1)}>-</button>
+                                        <input className="w-10 text-center text-xs font-black text-indigo-700 bg-white border-x border-slate-200 py-2" value={item.quantity} readOnly />
+                                        <button className="px-4 py-2 text-slate-500 hover:bg-slate-200 transition-colors font-black" onClick={() => updateCartItem(item.productId, 'quantity', item.quantity + 1)}>+</button>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rate:</span>
+                                        <div className="relative">
+                                            <span className="absolute left-2.5 top-1.5 text-[10px] font-bold text-slate-400">₦</span>
+                                            <input 
+                                                type="number" 
+                                                className="pl-6 pr-2 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-xs font-black w-24 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                value={item.price}
+                                                onChange={(e) => updateCartItem(item.productId, 'price', Number(e.target.value))}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2 shrink-0">
+                                <span className="font-black text-slate-900 text-base tracking-tighter">₦{(item.subtotal || 0).toLocaleString()}</span>
+                                <button onClick={() => removeFromCart(item.productId)} className="text-slate-200 hover:text-red-500 transition-colors p-1">
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                    {cart.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-full text-slate-200 py-20 opacity-60">
+                            <div className="p-8 bg-slate-50 rounded-full border border-dashed border-slate-200 mb-6">
+                                <PackageOpen className="w-16 h-16" />
+                            </div>
+                            <p className="text-[11px] font-black uppercase tracking-[0.5em]">Cart is empty</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-slate-900 p-10 space-y-8 text-white shrink-0">
+                    <div className="flex justify-between items-center">
+                        <span className="uppercase text-[10px] font-black tracking-[0.4em] text-slate-400">Grand Total Payable</span>
+                        <span className="text-4xl font-black text-indigo-400 tracking-tighter">₦{cartTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-6">
+                        <Select 
+                            label="LOG CHANNEL"
+                            value={paymentMethod}
+                            onChange={(e) => setPaymentMethod(e.target.value)}
+                            className="!bg-white/5 !border-white/10 !text-white !rounded-2xl !py-4 !font-black !text-[11px] !tracking-widest"
+                        >
+                            <option value="Cash" className="text-slate-900">Physical Cash</option>
+                            <option value="Transfer" className="text-slate-900">Bank Transfer</option>
+                            <option value="Card" className="text-slate-900">POS Terminal</option>
+                            <option value="Credit" className="text-slate-900">Ledger Debit</option>
+                        </Select>
+                        <div className="flex flex-col gap-2.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">AMOUNT SETTLED</label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-4 text-slate-400 font-bold text-sm">₦</span>
+                                <input 
+                                    type="number"
+                                    className="w-full pl-10 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 outline-none font-black text-lg text-indigo-400 shadow-inner"
+                                    value={amountPaid}
+                                    onChange={(e) => setAmountPaid(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-[10px] pt-8 border-t border-white/5 uppercase font-black tracking-widest">
+                        {Number(amountPaid) >= cartTotal ? (
+                            <>
+                                <span className="text-slate-500">Change Due</span>
+                                <span className="text-xl font-black text-emerald-400 tracking-tighter">₦{changeDue.toLocaleString()}</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="text-slate-500">Node Balance</span>
+                                <span className="text-xl font-black text-red-400 tracking-tighter">₦{balanceDue.toLocaleString()}</span>
+                            </>
+                        )}
+                    </div>
+
+                    <Button 
+                        className="w-full py-6 text-[12px] font-black uppercase tracking-[0.4em] shadow-2xl !rounded-2xl bg-indigo-600 hover:bg-indigo-700 !text-white border-0 active:scale-95 transition-all" 
+                        onClick={handleCheckout} 
+                        disabled={cart.length === 0}
+                    >
+                        Synchronize Entry
+                    </Button>
+                </div>
+            </Card>
+          </div>
+        </div>
+      ) : (
+        <Card className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border-0 ring-1 ring-slate-100 animate-in slide-in-from-bottom-6 duration-700">
+          <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-8 bg-slate-50/30">
+            <div>
+                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Audit Ledger Logs</h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Full transaction history & node tracking</p>
+            </div>
+            <div className="w-full md:w-[500px] relative">
+              <Search className="w-5 h-5 absolute left-5 top-5 text-slate-400" />
+              <input 
+                placeholder="Search by Audit ID or Client Identity..." 
+                className="w-full pl-14 pr-6 py-4.5 border border-slate-200 rounded-[1.5rem] font-bold text-sm outline-none focus:ring-8 focus:ring-indigo-500/5 bg-white shadow-sm"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="overflow-x-auto no-scrollbar">
+            <Table headers={['Audit ID', 'Timestamp', 'Subject Entity', 'Flux Items', 'Gross Total', 'State', 'Agent']}>
+                {filteredSales.map(sale => (
+                <tr key={sale.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0">
+                    <td className="px-8 py-7 text-[10px] text-slate-400 font-black uppercase tracking-tighter whitespace-nowrap">#{sale.id.slice(-8)}</td>
+                    <td className="px-8 py-7 text-xs font-bold text-slate-500 whitespace-nowrap">{new Date(sale.date).toLocaleString()}</td>
+                    <td className="px-8 py-7">
+                        <div className="font-black text-slate-900 text-sm tracking-tight">{sale.customerName}</div>
+                    </td>
+                    <td className="px-8 py-7">
+                        <div className="flex flex-col gap-1 max-w-[300px]">
+                            {sale.items.map((i, idx) => (
+                                <span key={idx} className="text-[10px] text-slate-400 font-bold uppercase tracking-tight truncate">
+                                   <span className="text-indigo-600 font-black">{i.quantity}x</span> {i.productName}
+                                </span>
+                            ))}
+                        </div>
+                    </td>
+                    <td className="px-8 py-7 text-base font-black text-indigo-600 whitespace-nowrap tracking-tighter">₦{sale.total.toLocaleString()}</td>
+                    <td className="px-8 py-7 whitespace-nowrap">
+                        <Badge color={sale.paymentMethod === 'Credit' ? 'red' : 'green'} className="!px-4 !py-1.5">{sale.paymentMethod}</Badge>
+                    </td>
+                    <td className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                        <div className="flex items-center gap-2"><UserCheck className="w-3.5 h-3.5" /> {sale.initiatedByName}</div>
+                    </td>
+                </tr>
+                ))}
+            </Table>
+          </div>
+          {filteredSales.length === 0 && (
+              <div className="p-40 text-center text-slate-300">
+                  <Receipt className="w-20 h-20 mx-auto mb-6 opacity-10" />
+                  <p className="text-[11px] font-black uppercase tracking-[0.5em]">Audit logs are clean</p>
+              </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 };
-
-// --- Guards ---
-const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
-    const { user, loading } = useApp();
-    useSyncData(); // Trigger cloud synchronization on protected route entry
-    
-    // While checking session, show a clean loader
-    if (loading) {
-        return (
-            <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-                <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Authenticating Node...</p>
-            </div>
-        );
-    }
-    
-    // If no user is found in the current session, force redirect to login
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
-    
-    return children ? <>{children}</> : <Outlet />;
-};
-
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-    const { user, loading } = useApp();
-    
-    if (loading) return null;
-    
-    // If user is already logged in, skip the login page and go to dashboard
-    if (user) {
-        return <Navigate to="/dashboard" replace />;
-    }
-    
-    return <>{children}</>;
-};
-
-export const AppRoutes = () => {
-    const { user } = useApp();
-    const navigate = useNavigate();
-    const goBack = () => navigate(-1);
-    
-    // Recalculate dashboard target based on current user role
-    const dashboardTarget = user?.role === Role.ADMIN ? "/admin/dashboard" : "/staff/dashboard";
-
-    return (
-        <Routes>
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/join" element={<PublicRoute><JoinPage /></PublicRoute>} />
-            
-            <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="dashboard" element={<Navigate to={dashboardTarget} replace />} />
-                
-                {/* Unified Admin Routes */}
-                <Route path="admin/dashboard" element={<Dashboard onNavigate={(p: string) => navigate(p === 'sales' ? '/admin/sales' : `/admin/${p}`)} />} />
-                <Route path="admin/sales" element={<Sales />} />
-                <Route path="admin/inventory" element={<Inventory onBack={goBack} />} />
-                <Route path="admin/stock" element={<Stock onBack={goBack} />} />
-                <Route path="admin/staff-management" element={<StaffManagement onBack={goBack} />} />
-                <Route path="admin/staff-roster" element={<Staff onBack={goBack} />} />
-                <Route path="admin/company-expenses" element={<CompanyExpenses onBack={goBack} />} />
-                <Route path="admin/bank-deposit" element={<BankDeposit onBack={goBack} />} />
-                <Route path="admin/payroll" element={<Payroll onBack={goBack} />} />
-                <Route path="admin/customers" element={<Customers onBack={goBack} onViewLedger={(c) => { localStorage.setItem('last_ledger_customer', c.id); navigate('/admin/customer-ledger'); }} />} />
-                <Route path="admin/customer-ledger" element={<CustomerLedger onBack={() => navigate('/admin/customers')} />} />
-                <Route path="admin/suppliers" element={<SupplierManagement onBack={goBack} onViewLedger={(s) => { localStorage.setItem('SupplierLedger.selectedSupplier', JSON.stringify(s)); navigate('/admin/supplier-ledger'); }} />} />
-                <Route path="admin/supplier-ledger" element={<SupplierLedger onBack={() => navigate('/admin/suppliers')} />} />
-                <Route path="admin/reports" element={<Reports />} />
-                
-                {/* Unified Staff Routes */}
-                <Route path="staff/dashboard" element={<Dashboard onNavigate={(p: string) => navigate(p === 'sales' ? '/staff/sales' : `/staff/${p}`)} />} />
-                <Route path="staff/sales" element={<Sales />} />
-                <Route path="staff/stock" element={<Stock onBack={goBack} />} />
-                <Route path="staff/staff-roster" element={<Staff onBack={goBack} />} />
-                <Route path="staff/customers" element={<Customers onBack={goBack} onViewLedger={(c) => { localStorage.setItem('last_ledger_customer', c.id); navigate('/staff/customer-ledger'); }} />} />
-                <Route path="staff/customer-ledger" element={<CustomerLedger onBack={() => navigate('/staff/customers')} />} />
-                <Route path="staff/reports" element={<Reports />} />
-                
-                <Route path="settings" element={<Settings />} />
-                
-                {/* Catch-all for protected routes: always return to role-appropriate dashboard */}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Route>
-        </Routes>
-    );
-};
-
-export default function App() {
-    return (
-        <BrowserRouter>
-            <AppProvider>
-                <AppRoutes />
-            </AppProvider>
-        </BrowserRouter>
-    );
-}

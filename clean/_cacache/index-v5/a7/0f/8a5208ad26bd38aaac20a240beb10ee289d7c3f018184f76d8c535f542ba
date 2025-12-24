@@ -1,0 +1,2 @@
+
+fe9005a88367b6d37dcf7d9247f71987d66c5d32	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/@chevrotain%2futils","integrity":null,"time":1766545589363,"size":"0","metadata":{"time":1766545589363,"url":"http://registry.npmjs.org/@chevrotain%2futils","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:31 GMT","location":"https://registry.npmjs.org/@chevrotain%2Futils","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

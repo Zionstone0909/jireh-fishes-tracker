@@ -1,0 +1,2 @@
+
+88cd93ce61cdae1d8d29af08a21cb77eec3c3e73	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/mysql2","integrity":null,"time":1766545534840,"size":"0","metadata":{"time":1766545534840,"url":"http://registry.npmjs.org/mysql2","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:05:36 GMT","location":"https://registry.npmjs.org/mysql2","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}

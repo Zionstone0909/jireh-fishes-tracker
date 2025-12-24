@@ -3,14 +3,21 @@
  * Mocking a SQL Server connection helper.
  * In a real environment, this would use the 'mssql' library.
  */
-// Fix: Casting sql to any to prevent "not callable" errors on parameterized types like VarChar(20)
+
+// We define 'sql' as both a value and a namespace to satisfy TypeScript
+export namespace sql {
+  export type Request = any;
+  export type ConnectionPool = any;
+}
+
 export const sql: any = {
   NVarChar: 'NVarChar',
   Decimal: (p: number, s: number) => `Decimal(${p},${s})`,
   DateTime: 'DateTime',
   VarChar: (l: number) => `VarChar(${l})`,
   Date: 'Date',
-  Int: 'Int'
+  Int: 'Int',
+  Bit: 'Bit'
 };
 
 class MockRequest {
@@ -19,10 +26,9 @@ class MockRequest {
     this.inputs[name] = value;
     return this;
   }
-  // Fix: Explicitly returning Promise<any> instead of void so that .recordset property access in routes passes type checking
   async query(q: string): Promise<any> {
     // This will trigger the catch block in the routes, 
-    // forcing them to use the fallbackStore which we want for this environment.
+    // forcing them to use the fallbackStore.
     throw new Error("Database connection not configured. Using fallback store.");
   }
 }

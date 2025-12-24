@@ -1,0 +1,2 @@
+
+cb9689bf600ed8906d6fb7342b98b350ac6e0055	{"key":"make-fetch-happen:request-cache:http://registry.npmjs.org/is-property","integrity":null,"time":1766545594746,"size":"0","metadata":{"time":1766545594746,"url":"http://registry.npmjs.org/is-property","reqHeaders":{"accept":"application/json"},"resHeaders":{"content-type":"text/plain;charset=UTF-8","date":"Wed, 24 Dec 2025 03:06:36 GMT","location":"https://registry.npmjs.org/is-property","vary":"Accept-Encoding"},"options":{"compress":true},"status":301}}
