@@ -94,18 +94,20 @@ const Storage = {
   set: (key: string, val: any) => localStorage.setItem(key, JSON.stringify(val)),
 };
 
+/**
+ * Enhanced Merge Logic: Prioritizes Server Data.
+ * If server returns a list, we assume it's the master copy for that user's access level.
+ */
 const mergeData = <T extends { id?: string | number; token?: string }>(local: T[], remote: T[]): T[] => {
-  if (!remote || remote.length === 0) return local;
-  const localMap = new Map(local.map(item => [item.id || item.token, item]));
-  remote.forEach(item => {
-    const key = item.id || item.token;
-    if (key) localMap.set(key, item);
-  });
-  return Array.from(localMap.values()).sort((a: any, b: any) => {
-    const timeA = new Date(a.date || a.createdAt || a.timestamp || 0).getTime();
-    const timeB = new Date(b.date || b.createdAt || b.timestamp || 0).getTime();
-    return timeB - timeA;
-  });
+  // If remote exists, it becomes the new source of truth
+  if (remote && Array.isArray(remote) && remote.length > 0) {
+      return remote.sort((a: any, b: any) => {
+        const timeA = new Date(a.date || a.createdAt || a.timestamp || 0).getTime();
+        const timeB = new Date(b.date || b.createdAt || b.timestamp || 0).getTime();
+        return timeB - timeA;
+      });
+  }
+  return local;
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -210,7 +212,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setUser(userObj);
             Storage.set('jireh_user', userObj);
             
-            // Critical session tracking call
             try {
               await ApiClient.post(`/api/users/${found.id}/session`, { lastLogin: now, isOnline: true });
             } catch(e) {}
@@ -229,17 +230,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await ApiClient.post(`/api/users/${user.id}/session`, { lastLogout: now, isOnline: false });
       } catch(e) {}
-      
-      const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
-      const idx = authUsers.findIndex((u: any) => u.id === user.id);
-      if (idx !== -1) {
-          authUsers[idx].lastLogout = now;
-          authUsers[idx].isOnline = false;
-          localStorage.setItem('jireh_users_auth', JSON.stringify(authUsers));
-      }
     }
     setUser(null);
     localStorage.removeItem('jireh_user');
+    // Clear local storage on logout to ensure next login fetches fresh data
+    const keysToKeep = ['jireh_users_auth']; 
+    Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('jireh_') && !keysToKeep.includes(k)) localStorage.removeItem(k);
+    });
   };
 
   const register = async (name: string, email: string, pass: string, role: Role) => {
@@ -550,7 +548,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const acceptInvitation = async (token: string, name: string, password: string) => {
     try {
         const result = await ApiClient.post('/api/invitations/accept', { token, name, password });
-        // Update local auth for mock persistence
         const authUsers = JSON.parse(localStorage.getItem('jireh_users_auth') || '[]');
         const newUser = { 
           id: result.user.id, 
@@ -563,7 +560,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           isOnline: true
         };
         localStorage.setItem('jireh_users_auth', JSON.stringify([...authUsers, newUser]));
-        
         await login(result.user.email, password);
     } catch (e) {
         const invite = await validateInvitation(token);
